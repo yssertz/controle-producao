@@ -1,101 +1,143 @@
-# Controle Geral de Produção
+# ⚙️ Controle Geral de Produção
 
-Sistema que estou desenvolvendo para ajudar no controle e acompanhamento da produção da fábrica.
+Sistema que estou desenvolvendo para **organizar e facilitar o acompanhamento da produção**.
 
-A ideia é centralizar algumas informações que hoje ficam espalhadas em planilhas e facilitar o acompanhamento das listas, OPs, nestings e produção.
+A ideia é centralizar informações que hoje ficam espalhadas em planilhas e deixar o controle de **listas, OPs, nestings e produção** mais simples e organizado.
 
-## O que o sistema faz
+> 🚧 **Projeto em desenvolvimento**
+>
+> Algumas funcionalidades ainda estão sendo implementadas e podem sofrer alterações conforme o sistema evolui.
 
-Atualmente o projeto está sendo desenvolvido para trabalhar com:
+---
 
-- Cadastro e gerenciamento de listas de produção
-- Cadastro e acompanhamento de OPs
-- Controle de nestings
-- Relação entre listas, OPs e nestings
-- Acompanhamento da produção
-- Definição da linha de produção
-- Controle dos equipamentos utilizados
-- Exclusão e alteração dos registros
-- Dashboard com informações da produção
+## 📌 Sobre o projeto
 
-## Tipos de listas
+O sistema foi pensado para acompanhar algumas etapas do processo de produção, desde o cadastro das listas até o acompanhamento das peças e nestings.
 
-O sistema foi pensado inicialmente para trabalhar com:
+### Principais funções
 
-- Rodoviário
-- Ambiental
-- Pós-vendas
-- Avulsos
-- Leniors
+- 📋 Cadastro e gerenciamento de listas
+- 🏷️ Cadastro e acompanhamento de OPs
+- 🔩 Controle de nestings
+- 🔗 Relação entre listas, OPs e nestings
+- 🏭 Definição da linha de produção
+- ⚙️ Acompanhamento dos equipamentos
+- 📊 Visualização das informações da produção
+- ✏️ Alteração dos registros
+- 🗑️ Exclusão de registros
 
-Cada tipo de lista pode ter suas próprias características e necessidades dentro do processo de produção.
+---
 
-## Linhas de produção
+## 📋 Tipos de listas
 
-As linhas utilizadas atualmente são:
+Atualmente o sistema trabalha com os seguintes tipos:
 
+| Tipo | Descrição |
+|---|---|
+| 🚛 Rodoviário | Produção de componentes rodoviários |
+| 🌱 Ambiental | Produção de componentes ambientais |
+| 🔧 Pós-vendas | Peças relacionadas ao pós-vendas |
+| 📦 Avulsos | Produção interna da fábrica |
+| 🏗️ Leniors | Produção interna destinada a processos posteriores |
+
+---
+
+## 🏭 Linhas de produção
+
+O sistema possui as seguintes linhas cadastradas:
+
+**GEKA**
 - GEKA
 - GEKA DOBRA
 - GEKA USINAGEM
+
+**Guilhotina**
 - GUILHOTINA
 - GUILHOTINA DOBRA
 - GUILHOTINA USINAGEM
+
+**Laser**
 - LASER 6KW/40KW
 - LASER 6KW/40KW DOBRA
 - LASER 6KW/40KW USINAGEM
+
+**Serra**
 - SERRA
 - SERRA DOBRA
 - SERRA USINAGEM
+
+**Usinagem**
 - USINAGEM
 
-## Tecnologias
+---
+
+## 🛠️ Tecnologias
 
 O projeto está sendo desenvolvido utilizando:
 
-- Next.js
-- TypeScript
-- React
-- Tailwind CSS
-- Supabase
-- PostgreSQL
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat-square&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 
-## Como rodar o projeto
+---
 
-Primeiro instale as dependências:
+## 🚀 Rodando o projeto
+
+Clone o repositório:
+
+```bash
+git clone https://github.com/SEU_USUARIO/controle-geral-producao.git
+cd controle-geral-producao
+```
+
+Instale as dependências:
 
 ```bash
 npm install
 ```
 
-Depois configure as variáveis de ambiente no arquivo `.env.local`.
-
-Exemplo:
+Crie um arquivo `.env.local` na raiz do projeto:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
-Depois é só iniciar o projeto:
+Depois execute:
 
 ```bash
 npm run dev
 ```
 
-O sistema ficará disponível em:
+O projeto estará disponível em:
 
 ```text
 http://localhost:3000
 ```
 
-## Objetivo do projeto
+---
 
-Esse projeto ainda está em desenvolvimento.
+## 🗺️ Próximos passos
 
-A ideia é ir substituindo aos poucos alguns controles que atualmente são feitos em planilhas, deixando o processo mais organizado e facilitando o acompanhamento da produção.
+Algumas das coisas que ainda pretendo implementar ou melhorar:
 
-Também pretendo adicionar outras funções conforme o sistema for sendo utilizado e as necessidades forem aparecendo.
+- [ ] Melhorar o acompanhamento da produção
+- [ ] Evoluir o controle de nestings
+- [ ] Melhorar os indicadores do dashboard
+- [ ] Automatizar algumas tarefas que hoje são feitas manualmente
+- [ ] Adicionar novos controles conforme a necessidade do processo
 
 ---
 
-Projeto desenvolvido por mim como parte do processo de melhoria e automatização do controle de produção.
+## 📈 Desenvolvimento
+
+Esse projeto está sendo desenvolvido aos poucos, com foco em **resolver problemas reais do dia a dia da produção**.
+
+A ideia não é criar algo complicado, mas sim uma ferramenta que realmente ajude no controle e acompanhamento do processo.
+
+---
+
+**Desenvolvido por mim durante o processo de automatização e melhoria do controle de produção.**
