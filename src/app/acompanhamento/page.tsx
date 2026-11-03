@@ -95,7 +95,7 @@ export default function AcompanhamentoPage() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ position: "sticky", left: 0, background: "#f6f8fb" }}>Linha</th>
+                  <th style={{ position: "sticky", left: 0, background: "var(--table-head)" }}>Linha</th>
                   {lists.map((l) => (
                     <th key={l.id} style={{ textAlign: "center", minWidth: 120 }}>
                       <Link className="link" href={`/listas/${l.id}`}>{listLabel(l.code, l.name)}</Link>
@@ -104,7 +104,7 @@ export default function AcompanhamentoPage() {
                   ))}
                 </tr>
                 <tr>
-                  <th style={{ position: "sticky", left: 0, background: "#f6f8fb" }}>TOTAL</th>
+                  <th style={{ position: "sticky", left: 0, background: "var(--table-head)" }}>TOTAL</th>
                   {lists.map((l) => {
                     const p = percent(l.done, l.total);
                     return (
@@ -118,7 +118,7 @@ export default function AcompanhamentoPage() {
               <tbody>
                 {lines.map((ln) => (
                   <tr key={ln.id}>
-                    <td style={{ position: "sticky", left: 0, background: "#fff", fontWeight: 600 }}>{ln.name}</td>
+                    <td style={{ position: "sticky", left: 0, background: "var(--surface)", fontWeight: 600 }}>{ln.name}</td>
                     {lists.map((l) => {
                       const c = cell.get(`${l.id}|${ln.id}`);
                       if (!c) return <td key={l.id} style={{ textAlign: "center" }} className="muted">—</td>;

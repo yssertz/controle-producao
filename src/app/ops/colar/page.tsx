@@ -70,6 +70,7 @@ function ColarContent() {
   }, [listId]);
 
   const defaultLine = lines.find((l) => l.id === defaultLineId) ?? null;
+  const selectedList = lists.find((l) => l.id === listId) ?? null;
   const repeated = useMemo(() => findRepeatedInPaste(rows), [rows]);
 
   const info = useMemo(
@@ -84,17 +85,20 @@ function ColarContent() {
           lineName = lines.find((l) => l.id === lid)?.name ?? null;
         }
         if (!explicit) lineName = resolved.get(r.item_code.trim().toUpperCase())?.line_name ?? null;
+        const isUnmapped = lineName === null && !explicit;
         if (!lineName && defaultLine) lineName = defaultLine.name;
         const hasLine = lineName !== null;
         const inDb = existing.has(itemKey(r.op_number, r.item_code, r.material_code));
         const dup = r.errors.length === 0 && hasLine && (inDb || repeated.has(idx));
         const state: View = r.errors.length ? "erro" : !hasLine ? "sem_linha" : dup ? "duplicada" : "pronta";
-        return { lineName, hasLine, inDb, repeatedInPaste: repeated.has(idx), dup, state };
+        const isLoose = selectedList?.list_type === "Avulsos" && isUnmapped && defaultLine !== null;
+        return { lineName, hasLine, inDb, repeatedInPaste: repeated.has(idx), dup, state, isLoose };
       }),
-    [rows, resolved, existing, repeated, defaultLine, erpLine, lines],
+    [rows, resolved, existing, repeated, defaultLine, erpLine, lines, selectedList],
   );
 
   const count = (s: View) => info.filter((i) => i.state === s).length;
+  const looseCount = info.filter((i) => i.isLoose && (!skipDup || !i.dup)).length;
   const toImport = rows.filter((r, i) => r.errors.length === 0 && info[i]?.hasLine);
 
   const shown = rows
@@ -249,16 +253,20 @@ function ColarContent() {
               </select>
             </div>
             <div className="field">
-              <label htmlFor="c-line">Linha para itens fora do catálogo (opcional)</label>
+              <label htmlFor="c-line">Linha para peças sem cadastro (opcional)</label>
               <select id="c-line" className="select" value={defaultLineId} onChange={(e) => setDefaultLineId(e.target.value)}>
-                <option value="">Ignorar itens sem linha (padrão)</option>
+                <option value="">{selectedList?.list_type === "Avulsos" ? "Não importar peças sem cadastro" : "Ignorar itens sem linha (padrão)"}</option>
                 {lines.map((l) => (
                   <option key={l.id} value={l.id}>
                     Usar {l.name}
                   </option>
                 ))}
               </select>
-              <span className="hint">Itens comprados/conjuntos não têm linha e são ignorados. Em listas Leniors ou Avulsos você pode escolher uma linha para todos.</span>
+              <span className="hint">
+                {selectedList?.list_type === "Avulsos"
+                  ? "Escolha uma linha para incluir como avulsas as peças que não estão no catálogo."
+                  : "Itens sem linha no catálogo serão ignorados, a menos que você escolha uma linha. Para tratá-los como avulsos, selecione uma lista do tipo Avulsos."}
+              </span>
             </div>
           </div>
         </section>
@@ -325,7 +333,12 @@ function ColarContent() {
             )}
             {count("sem_linha") > 0 && (
               <Notice kind="info">
-                {count("sem_linha")} linha(s) não têm linha de fabricação no catálogo (itens comprados, conjuntos ou ainda não cadastrados) e <strong>serão ignoradas</strong>. Se algum item deveria ter linha, atualize o <Link className="link" href="/catalogo">catálogo de itens</Link>.
+                {count("sem_linha")} linha(s) não têm linha de fabricação no catálogo. Selecione uma lista do tipo Avulsos e uma linha padrão para importá-las como peças avulsas; sem isso, serão ignoradas. Se algum item deveria ter linha fixa, atualize o <Link className="link" href="/catalogo">catálogo de itens</Link>.
+              </Notice>
+            )}
+            {looseCount > 0 && defaultLine && (
+              <Notice kind="info">
+                {looseCount} peça(s) sem cadastro serão incluídas como avulsas na lista selecionada, usando a linha {defaultLine.name}.
               </Notice>
             )}
             {shown.length === 0 ? (
@@ -371,7 +384,8 @@ function ColarContent() {
                             {r.errors.map((e) => <div key={e} className="cell-msg err">{e}</div>)}
                             {r.warnings.map((w) => <div key={w} className="cell-msg warn">{w}</div>)}
                             {r.errors.length === 0 && i.dup && <span className="pill amber">{i.inDb ? "Já cadastrada" : "Repetida na colagem"}</span>}
-                            {r.errors.length === 0 && !i.dup && i.hasLine && r.warnings.length === 0 && <span className="pill green">OK</span>}
+                            {r.errors.length === 0 && !i.dup && i.hasLine && i.isLoose && <span className="pill blue">Avulsa</span>}
+                            {r.errors.length === 0 && !i.dup && i.hasLine && !i.isLoose && r.warnings.length === 0 && <span className="pill green">OK</span>}
                           </td>
                           <td>
                             <button className="icon-btn" onClick={() => setRows((prev) => prev.filter((_, k) => k !== idx))} aria-label="Remover linha" title="Remover linha">

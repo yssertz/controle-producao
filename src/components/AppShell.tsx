@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, ClipboardList, Database, Factory, LayoutDashboard, Loader2, LogOut, Package, Truck, Zap } from "lucide-react";
+import { Activity, ClipboardList, Database, Factory, LayoutDashboard, Loader2, LogOut, Moon, Package, Sun, Truck, Zap } from "lucide-react";
 import { configured } from "@/lib/supabase";
 import { useAuth } from "./AuthProvider";
 
@@ -32,7 +32,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { loading, session, profile, profileError, role, signOut } = useAuth();
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const isLogin = pathname === "/login";
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("cgp-theme");
+    const nextTheme = saved === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = nextTheme;
+    setTheme(nextTheme);
+  }, []);
+
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("cgp-theme", nextTheme);
+    setTheme(nextTheme);
+  }
 
   // Quem não está logado vai para a tela de login.
   useEffect(() => {
@@ -103,6 +118,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="muted">PCP · Produção · Corte a Laser</div>
           </div>
           <div className="topbar-user">
+            <button
+              className="btn secondary small theme-toggle"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+              aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+              aria-pressed={theme === "dark"}
+            >
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              <span>{theme === "dark" ? "Modo claro" : "Modo escuro"}</span>
+            </button>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 12, fontWeight: 700 }}>{profile.full_name?.trim() || profile.email}</div>
               <div className="muted">{role ? ROLE_LABEL[role] : ""}</div>

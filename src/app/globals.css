@@ -26,6 +26,7 @@
   --red-100: #fde8e6;
   --gray-100: #edf0f4;
   --gray-700: #4b5565;
+  --table-head: #f6f8fb;
 }
 
 * { box-sizing: border-box; }
@@ -188,6 +189,82 @@ tr.row-clickable { cursor: pointer; }
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; background: var(--navy-900); }
 .login-card { width: 100%; max-width: 400px; background: #fff; border-radius: 12px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
 
+/* ---------- Tema escuro ---------- */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --surface: #141e2e;
+  --ink: #e5eaf2;
+  --muted: #9aa9bd;
+  --border: #2a394d;
+  --border-soft: #223044;
+  --navy-900: #0a1322;
+  --navy-800: #1b2c44;
+  --navy-700: #294975;
+  --blue-600: #3976c4;
+  --blue-500: #67a5f2;
+  --blue-100: #1b3556;
+  --blue-50: #14283f;
+  --green-700: #58c58a;
+  --green-100: #173629;
+  --amber-700: #f0c66a;
+  --amber-100: #3a2d16;
+  --red-700: #ff8d83;
+  --red-100: #3b211f;
+  --gray-100: #263448;
+  --gray-700: #c4cfdd;
+  --table-head: #1b293c;
+}
+
+html[data-theme="dark"] body { color-scheme: dark; }
+html[data-theme="dark"] .btn.secondary,
+html[data-theme="dark"] .btn.danger-outline,
+html[data-theme="dark"] .input,
+html[data-theme="dark"] .select,
+html[data-theme="dark"] .textarea,
+html[data-theme="dark"] .radio-card,
+html[data-theme="dark"] .table-wrap,
+html[data-theme="dark"] .balance-box,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .step,
+html[data-theme="dark"] .login-card { background: var(--surface); color: var(--ink); }
+html[data-theme="dark"] .btn.secondary:hover:not(:disabled),
+html[data-theme="dark"] .icon-btn:hover { background: var(--blue-50); }
+html[data-theme="dark"] .btn.danger-outline { border-color: #75413d; }
+html[data-theme="dark"] .btn.success { background: #237a4b; color: #f1fff7; }
+html[data-theme="dark"] .btn.danger { background: #8f2f2a; color: #fff; }
+html[data-theme="dark"] .input,
+html[data-theme="dark"] .select,
+html[data-theme="dark"] .textarea { border-color: var(--border); }
+html[data-theme="dark"] .input:disabled,
+html[data-theme="dark"] .select:disabled { background: var(--gray-100); }
+html[data-theme="dark"] .input.invalid { background: #321f21; border-color: #874b48; }
+html[data-theme="dark"] .radio-card.selected { background: var(--blue-100); color: #c6ddff; }
+html[data-theme="dark"] .notice,
+html[data-theme="dark"] .notice.success,
+html[data-theme="dark"] .notice.warning,
+html[data-theme="dark"] .notice.error { border-color: var(--border); }
+html[data-theme="dark"] th { background: var(--table-head); color: #b9c6d7; }
+html[data-theme="dark"] tbody tr:hover { background: #1a293d; }
+html[data-theme="dark"] tr.row-error td { background: #321f21; }
+html[data-theme="dark"] tr.row-dup td { background: #342a19; }
+html[data-theme="dark"] .modal-head h2,
+html[data-theme="dark"] .stat-value,
+html[data-theme="dark"] .section-title,
+html[data-theme="dark"] .balance-box .v { color: var(--ink); }
+html[data-theme="dark"] .field label { color: var(--gray-700); }
+html[data-theme="dark"] .theme-toggle { min-width: 118px; }
+
+html[data-theme="dark"] .notice.success { color: #7de0a8; }
+html[data-theme="dark"] .notice.warning { color: #f0c66a; }
+html[data-theme="dark"] .notice.error { color: #ff9a91; }
+html[data-theme="dark"] .pill.blue { color: #c6ddff; }
+html[data-theme="dark"] .pill.green { color: #7de0a8; }
+html[data-theme="dark"] .pill.amber { color: #f0c66a; }
+html[data-theme="dark"] .pill.red { color: #ff9a91; }
+html[data-theme="dark"] .btn.danger-outline { color: #ff9a91; }
+html[data-theme="dark"] .link { color: #82b6fa; }
+
 /* ---------- Tablets e telas menores ---------- */
 @media (max-width: 1100px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -208,4 +285,6 @@ tr.row-clickable { cursor: pointer; }
   .form, .form.three, .stats { grid-template-columns: 1fr; }
   .full { grid-column: auto; }
   h1 { font-size: 22px; }
+  .theme-toggle { min-width: 38px; padding: 5px 9px; }
+  .theme-toggle span { display: none; }
 }
