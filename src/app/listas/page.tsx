@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Archive, ArchiveRestore, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { DeleteListDialog } from "@/components/DeleteDialogs";
 import { ConfirmModal, Modal } from "@/components/Modal";
 import { EmptyState, Loading, Notice, PageHeader, StatusPill } from "@/components/ui";
 import { LIST_STATUSES, LIST_TYPES } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel, todayISO } from "@/lib/format";
-import { createList, deleteList, fetchListSummaries, setListStatus, updateList, type ListInput } from "@/lib/lists";
+import { createList, fetchListSummaries, setListStatus, updateList, type ListInput } from "@/lib/lists";
 import type { ListStatus, ListSummary, ListType } from "@/lib/types";
 
 type Message = { kind: "success" | "error"; text: string } | null;
@@ -130,7 +131,7 @@ export default function ListasPage() {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<{ editing: ListSummary | null } | null>(null);
   const [archiving, setArchiving] = useState<ListSummary | null>(null);
-  const [deleting, setDeleting] = useState<ListSummary | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -157,21 +158,6 @@ export default function ListasPage() {
       return true;
     });
   }, [rows, typeFilter, statusFilter, search]);
-
-  async function removeList(list: ListSummary) {
-    setBusy(true);
-    try {
-      await deleteList(list.id);
-      setMsg({ kind: "success", text: `Lista ${listLabel(list.code, list.name)} excluída definitivamente.` });
-      setDeleting(null);
-      await load();
-    } catch (err) {
-      setMsg({ kind: "error", text: errorText(err) });
-      setDeleting(null);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function toggleArchive(list: ListSummary) {
     setBusy(true);
@@ -300,7 +286,7 @@ export default function ListasPage() {
                             {l.status === "Arquivada" ? <ArchiveRestore size={12} /> : <Archive size={12} />}
                             {l.status === "Arquivada" ? "Restaurar" : "Arquivar"}
                           </button>
-                          <button className="btn danger-outline small" onClick={() => setDeleting(l)}>
+                          <button className="btn danger-outline small" onClick={() => setDeletingId(l.id)}>
                             <Trash2 size={12} /> Excluir
                           </button>
                         </>
@@ -326,15 +312,15 @@ export default function ListasPage() {
         />
       )}
 
-      {deleting && (
-        <ConfirmModal
-          title="Excluir lista definitivamente"
-          message={<>A lista <strong>{listLabel(deleting.code, deleting.name)}</strong> e todas as OPs cadastradas nela serão apagadas permanentemente. Esta ação não pode ser desfeita. Se alguma OP estiver vinculada a um nesting, a exclusão será bloqueada para proteger o histórico.</>}
-          confirmLabel="Excluir definitivamente"
-          danger
-          busy={busy}
-          onConfirm={() => void removeList(deleting)}
-          onCancel={() => setDeleting(null)}
+      {deletingId && (
+        <DeleteListDialog
+          listId={deletingId}
+          onClose={() => setDeletingId(null)}
+          onDone={(text) => {
+            setDeletingId(null);
+            setMsg({ kind: "success", text });
+            void load();
+          }}
         />
       )}
 

@@ -3,6 +3,7 @@ import { unwrap } from "./errors";
 import { fetchAll } from "./fetch-all";
 import { PAGE_SIZE } from "./constants";
 import { itemKey } from "./excel-paste";
+import { parseThicknessMm } from "./thickness";
 import type { ImportResult, ItemBalance, ItemNestingRow, ItemStatus, ResolvedLine } from "./types";
 
 export interface ItemFilters {
@@ -15,6 +16,8 @@ export interface ItemFilters {
   onlyNestable?: boolean;
   /** só itens que ainda têm quantidade a programar */
   onlyUnscheduled?: boolean;
+  /** espessura em mm (texto numérico, ex.: "6.35"); "none" = itens sem espessura definida */
+  thickness?: string;
 }
 
 /** Remove caracteres que quebrariam o filtro .or() do PostgREST. */
@@ -29,6 +32,8 @@ export async function searchItems(filters: ItemFilters, page: number): Promise<{
   if (filters.status) q = q.eq("status", filters.status);
   if (filters.onlyNestable) q = q.eq("line_allows_nesting", true);
   if (filters.onlyUnscheduled) q = q.gt("qty_unscheduled", 0);
+  if (filters.thickness === "none") q = q.is("thickness_mm", null);
+  else if (filters.thickness) q = q.eq("thickness_mm", Number(filters.thickness));
   q = filters.showArchived ? q.not("archived_at", "is", null) : q.is("archived_at", null);
   const term = sanitizeSearch(filters.search);
   if (term) q = q.or(`op_number.ilike.%${term}%,item_code.ilike.%${term}%,description.ilike.%${term}%`);
@@ -146,6 +151,8 @@ export interface ImportRow {
   material: string;
   item_unit: string;
   erp_line_code: number | null;
+  /** espessura em mm calculada a partir da descrição da MP */
+  thickness_mm: number | null;
 }
 
 export async function importItemsErp(
@@ -178,6 +185,53 @@ export async function setItemInvoice(ids: string[], invoice: string): Promise<vo
   unwrap(await supabase().rpc("set_item_invoice", { p_item_ids: ids, p_invoice: invoice }));
 }
 
-export async function deleteItem(id: string): Promise<void> {
-  unwrap(await supabase().rpc("delete_production_order", { p_order_id: id }));
+export interface ThicknessOption {
+  thickness_mm: number | null;
+  items: number;
+}
+
+/** Espessuras existentes e quantos itens têm cada uma (para os filtros). */
+export async function fetchThicknesses(opts: { listId?: string; onlyNestable: boolean; onlyPending: boolean }): Promise<ThicknessOption[]> {
+  const res = await supabase().rpc("item_thicknesses", {
+    p_list_id: opts.listId || null,
+    p_only_nestable: opts.onlyNestable,
+    p_only_pending: opts.onlyPending,
+  });
+  return (unwrap(res) ?? []) as ThicknessOption[];
+}
+
+/**
+ * Calcula a espessura dos itens já cadastrados que ainda não têm (a partir da descrição da MP).
+ * Retorna quantos foram atualizados e quantos não puderam ser interpretados (ex.: tubo, barra redonda).
+ */
+export async function recalcThickness(): Promise<{ updated: number; unresolved: number }> {
+  const rows = await fetchAll<{ id: string; material: string | null }>((from, to) =>
+    supabase().from("production_orders").select("id,material").is("thickness_mm", null).not("material", "is", null).range(from, to),
+  );
+  const resolved: { id: string; thickness_mm: number }[] = [];
+  let unresolved = 0;
+  for (const r of rows) {
+    const t = parseThicknessMm(r.material);
+    if (t === null) unresolved++;
+    else resolved.push({ id: r.id, thickness_mm: t });
+  }
+  let updated = 0;
+  for (let i = 0; i < resolved.length; i += 1000) {
+    const res = await supabase().rpc("set_items_thickness", { p_rows: resolved.slice(i, i + 1000) });
+    updated += Number(unwrap(res) ?? 0);
+  }
+  return { updated, unresolved };
+}
+
+/** Diagnóstico para quando a busca de peças do nesting vem vazia: mostra onde as peças "somem". */
+export async function fetchPickerDiagnostics(): Promise<string> {
+  const base = () => supabase().from("production_item_balance").select("id", { count: "exact", head: true }).is("archived_at", null);
+  const [all, nestable, pending, lines] = await Promise.all([
+    base(),
+    base().eq("line_allows_nesting", true),
+    base().eq("line_allows_nesting", true).gt("qty_unscheduled", 0),
+    supabase().from("production_lines").select("id", { count: "exact", head: true }).eq("allows_nesting", true).eq("active", true),
+  ]);
+  for (const r of [all, nestable, pending, lines]) if (r.error) unwrap({ data: null, error: r.error });
+  return `Itens cadastrados: ${all.count ?? 0} · em linhas de laser: ${nestable.count ?? 0} · com saldo a programar: ${pending.count ?? 0} · linhas de laser ativas: ${lines.count ?? 0}.`;
 }

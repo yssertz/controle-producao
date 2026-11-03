@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { DeleteListDialog } from "@/components/DeleteDialogs";
 import { BackLink, EmptyState, Loading, Notice, Pagination, StatusPill } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
@@ -17,6 +18,8 @@ export default function ListaDetalhePage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const { canPlan } = useAuth();
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
   const [list, setList] = useState<ListSummary | null>(null);
   const [items, setItems] = useState<ItemBalance[]>([]);
   const [itemsTotal, setItemsTotal] = useState(0);
@@ -76,6 +79,13 @@ export default function ListaDetalhePage() {
               </p>
               {list.notes && <p className="subtitle" style={{ marginTop: 8 }}>{list.notes}</p>}
             </div>
+            {canPlan && (
+              <div className="heading-actions">
+                <button className="btn danger-outline" onClick={() => setDeleting(true)}>
+                  <Trash2 size={14} /> Excluir lista
+                </button>
+              </div>
+            )}
             {canPlan && list.status !== "Arquivada" && (
               <div className="heading-actions">
                 <Link className="btn secondary" href={`/ops/colar?lista=${list.id}`}>
@@ -185,6 +195,13 @@ export default function ListaDetalhePage() {
               </div>
             )}
           </section>
+          {deleting && (
+            <DeleteListDialog
+              listId={list.id}
+              onClose={() => setDeleting(false)}
+              onDone={() => router.push("/listas")}
+            />
+          )}
         </>
       )}
     </main>

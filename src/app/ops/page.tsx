@@ -5,13 +5,15 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Archive, ArchiveRestore, ClipboardPaste, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { DeleteItemsDialog } from "@/components/DeleteDialogs";
 import { ItemFormModal } from "@/components/ItemFormModal";
 import { ConfirmModal } from "@/components/Modal";
 import { EmptyState, Loading, Notice, PageHeader, Pagination, StatusPill } from "@/components/ui";
 import { ITEM_STATUSES } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
-import { deleteItem, searchItems, setItemArchived, type ItemFilters } from "@/lib/items";
+import { fetchThicknesses, recalcThickness, searchItems, setItemArchived, type ItemFilters, type ThicknessOption } from "@/lib/items";
+import { formatMm } from "@/lib/thickness";
 import { fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { ItemBalance, ProductionLine } from "@/lib/types";
 
@@ -26,7 +28,10 @@ function OpsContent() {
     status: "",
     search: "",
     showArchived: false,
+    thickness: "",
   });
+  const [thicknesses, setThicknesses] = useState<ThicknessOption[]>([]);
+  const [calcBusy, setCalcBusy] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<ItemBalance[]>([]);
@@ -37,8 +42,9 @@ function OpsContent() {
   const [msg, setMsg] = useState<Message>(null);
   const [modal, setModal] = useState<{ editing: ItemBalance | null } | null>(null);
   const [archiving, setArchiving] = useState<ItemBalance | null>(null);
-  const [deleting, setDeleting] = useState<ItemBalance | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
 
   // Listas e linhas para os filtros e formulários
   useEffect(() => {
@@ -49,6 +55,33 @@ function OpsContent() {
       })
       .catch((err) => setMsg({ kind: "error", text: errorText(err) }));
   }, []);
+
+  const loadThicknesses = useCallback(() => {
+    fetchThicknesses({ onlyNestable: false, onlyPending: false })
+      .then(setThicknesses)
+      .catch((err) => setMsg({ kind: "error", text: errorText(err) }));
+  }, []);
+
+  useEffect(() => {
+    loadThicknesses();
+  }, [loadThicknesses]);
+
+  async function calcThickness() {
+    setCalcBusy(true);
+    try {
+      const r = await recalcThickness();
+      setMsg({
+        kind: "success",
+        text: `${r.updated} item(ns) com espessura calculada.${r.unresolved > 0 ? ` ${r.unresolved} item(ns) não puderam ser interpretados (ex.: tubo, barra redonda, descrição sem medida).` : ""}`,
+      });
+      loadThicknesses();
+      await load();
+    } catch (err) {
+      setMsg({ kind: "error", text: errorText(err) });
+    } finally {
+      setCalcBusy(false);
+    }
+  }
 
   // Busca com pequena espera, para não consultar a cada letra digitada
   useEffect(() => {
@@ -63,6 +96,10 @@ function OpsContent() {
     setLoading(true);
     try {
       const res = await searchItems(filters, page);
+      if (res.rows.length === 0 && page > 0) {
+        setPage(page - 1); // a página ficou vazia (ex.: após excluir): volta uma página
+        return;
+      }
       setRows(res.rows);
       setTotal(res.total);
     } catch (err) {
@@ -79,22 +116,24 @@ function OpsContent() {
   function changeFilter(patch: Partial<ItemFilters>) {
     setFilters((f) => ({ ...f, ...patch }));
     setPage(0);
+    setSelected(new Set());
   }
 
-  async function removeItem(item: ItemBalance) {
-    setBusy(true);
-    try {
-      await deleteItem(item.id);
-      setMsg({ kind: "success", text: `OP ${item.op_number} excluída definitivamente.` });
-      setDeleting(null);
-      await load();
-    } catch (err) {
-      setMsg({ kind: "error", text: errorText(err) });
-      setDeleting(null);
-    } finally {
-      setBusy(false);
-    }
+  function goPage(p: number) {
+    setPage(p);
+    setSelected(new Set());
   }
+
+  function toggleOne(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   async function toggleArchive(item: ItemBalance) {
     setBusy(true);
@@ -124,6 +163,11 @@ function OpsContent() {
             <button className="btn secondary" onClick={() => void load()} disabled={loading}>
               <RefreshCw size={14} /> Atualizar
             </button>
+            {canPlan && selected.size > 0 && (
+              <button className="btn danger-outline" onClick={() => setDeleteIds([...selected])}>
+                <Trash2 size={14} /> Excluir selecionados ({selected.size})
+              </button>
+            )}
             {canPlan && (
               <>
                 <Link className="btn secondary" href={filters.listId ? `/ops/colar?lista=${filters.listId}` : "/ops/colar"}>
@@ -180,6 +224,25 @@ function OpsContent() {
             ))}
           </select>
         </div>
+        <div className="field">
+          <label htmlFor="f-thick">Espessura</label>
+          <select id="f-thick" className="select" value={filters.thickness ?? ""} onChange={(e) => changeFilter({ thickness: e.target.value })}>
+            <option value="">Todas</option>
+            {thicknesses
+              .filter((t) => t.thickness_mm !== null)
+              .map((t) => (
+                <option key={t.thickness_mm} value={String(Number(t.thickness_mm))}>
+                  {formatMm(Number(t.thickness_mm))} ({t.items})
+                </option>
+              ))}
+            {thicknesses.some((t) => t.thickness_mm === null) && <option value="none">Sem espessura definida</option>}
+          </select>
+        </div>
+        {canPlan && (
+          <button className="btn secondary" onClick={() => void calcThickness()} disabled={calcBusy} title="Calcula a espessura (mm) dos itens que ainda não têm, a partir da descrição da matéria-prima">
+            {calcBusy ? "Calculando..." : "Calcular espessuras"}
+          </button>
+        )}
         <label className="checkbox" style={{ paddingBottom: 9 }}>
           <input type="checkbox" checked={filters.showArchived} onChange={(e) => changeFilter({ showArchived: e.target.checked })} />
           Somente arquivados
@@ -202,9 +265,21 @@ function OpsContent() {
             <table>
               <thead>
                 <tr>
+                  {canPlan && (
+                    <th style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())}
+                        aria-label="Selecionar todos desta página"
+                        style={{ width: 16, height: 16 }}
+                      />
+                    </th>
+                  )}
                   <th>OP</th>
                   <th>Item</th>
-                  <th>Descrição</th>
+                  <th>Matéria-prima</th>
+                  <th>Espessura</th>
                   <th>Lista</th>
                   <th>Linha</th>
                   <th className="num">Qtd.</th>
@@ -220,13 +295,25 @@ function OpsContent() {
                   const excess = r.qty_excess_programmed > 0 || r.qty_excess_cut > 0;
                   return (
                     <tr key={r.id}>
+                      {canPlan && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.id)}
+                            onChange={(e) => toggleOne(r.id, e.target.checked)}
+                            aria-label={`Selecionar OP ${r.op_number}`}
+                            style={{ width: 16, height: 16 }}
+                          />
+                        </td>
+                      )}
                       <td>
                         <Link className="link" href={`/ops/${r.id}`}>
                           {r.op_number}
                         </Link>
                       </td>
                       <td>{r.item_code ?? "—"}</td>
-                      <td style={{ maxWidth: 280 }}>{r.description ?? "—"}</td>
+                      <td style={{ maxWidth: 260 }} className="muted">{r.material ?? r.description ?? "—"}</td>
+                      <td className="nowrap">{formatMm(r.thickness_mm)}</td>
                       <td>{r.list_name ? listLabel(r.list_code, r.list_name) : <span className="pill red">Sem lista</span>}</td>
                       <td>{r.line_name ?? <span className="pill red">Sem linha</span>}</td>
                       <td className="num">
@@ -256,7 +343,7 @@ function OpsContent() {
                                 {r.archived_at ? <ArchiveRestore size={12} /> : <Archive size={12} />}
                                 {r.archived_at ? "Restaurar" : "Arquivar"}
                               </button>
-                              <button className="btn danger-outline small" onClick={() => setDeleting(r)}>
+                              <button className="btn danger-outline small" onClick={() => setDeleteIds([r.id])}>
                                 <Trash2 size={12} /> Excluir
                               </button>
                             </>
@@ -269,7 +356,7 @@ function OpsContent() {
               </tbody>
             </table>
           </div>
-          <Pagination page={page} total={total} onPage={setPage} />
+          <Pagination page={page} total={total} onPage={goPage} />
         </>
       )}
 
@@ -288,15 +375,16 @@ function OpsContent() {
         />
       )}
 
-      {deleting && (
-        <ConfirmModal
-          title="Excluir OP definitivamente"
-          message={<>A OP <strong>{deleting.op_number}</strong> será apagada permanentemente, junto com seus dados de acompanhamento. Se ela estiver vinculada a algum nesting, a exclusão será bloqueada para preservar o histórico do corte.</>}
-          confirmLabel="Excluir definitivamente"
-          danger
-          busy={busy}
-          onConfirm={() => void removeItem(deleting)}
-          onCancel={() => setDeleting(null)}
+      {deleteIds && (
+        <DeleteItemsDialog
+          ids={deleteIds}
+          onClose={() => setDeleteIds(null)}
+          onDone={(text) => {
+            setDeleteIds(null);
+            setSelected(new Set());
+            setMsg({ kind: "success", text });
+            void load();
+          }}
         />
       )}
 

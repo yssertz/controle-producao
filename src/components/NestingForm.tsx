@@ -8,7 +8,9 @@ import { NESTING_CODE_REGEX } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
 import { emptyToNull, formatQty, listLabel } from "@/lib/format";
 import { parseDecimalBR } from "@/lib/excel-paste";
-import { fetchItemsByIds, fetchItemsByOpCodes, searchItems } from "@/lib/items";
+import { fetchItemsByIds, fetchItemsByOpCodes, fetchPickerDiagnostics, fetchThicknesses, searchItems, type ThicknessOption } from "@/lib/items";
+import { pdfToText } from "@/lib/pdf-text";
+import { formatMm } from "@/lib/thickness";
 import { parseNestingText } from "@/lib/nesting-text";
 import { fetchNesting, fetchNestingItems, fetchNextNestingCode, saveNesting, type NestingItemInput } from "@/lib/nestings";
 import { fetchLaserMachines, fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
@@ -38,7 +40,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const [code, setCode] = useState("");
   const [machineId, setMachineId] = useState("");
   const [material, setMaterial] = useState("");
-  const [materialCode, setMaterialCode] = useState("");
   const [thick, setThick] = useState("");
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -65,6 +66,8 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   // importação do texto do PDF do nesting
   const [pdfText, setPdfText] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [thicknessOptions, setThicknessOptions] = useState<ThicknessOption[]>([]);
+  const [diag, setDiag] = useState("");
   const [pdfMsg, setPdfMsg] = useState<{ kind: "success" | "warning" | "error"; lines: string[] } | null>(null);
 
   // Carga inicial
@@ -85,8 +88,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
           setCode(n.code);
           setMachineId(n.laser_machine_id ?? "");
           setMaterial(n.material ?? "");
-          setMaterialCode(n.material_code ?? "");
-          setThick(n.thickness_mm !== null ? toText(n.thickness_mm) : "");
+          setThick(n.thickness_mm !== null ? String(Number(n.thickness_mm)) : "");
           setDate(n.programmed_at ?? "");
           setNotes(n.notes ?? "");
           const snapshots = await fetchItemsByIds(its.map((i) => i.production_order_id));
@@ -116,6 +118,14 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     };
   }, [nestingId]);
 
+  // Espessuras que existem entre as peças de laser com saldo a programar
+  useEffect(() => {
+    if (!ready) return;
+    fetchThicknesses({ onlyNestable: true, onlyPending: true })
+      .then(setThicknessOptions)
+      .catch((e) => setError(errorText(e)));
+  }, [ready, refreshKey]);
+
   // busca com pequena espera
   useEffect(() => {
     const t = setTimeout(() => {
@@ -130,11 +140,12 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     if (!ready) return;
     let cancelled = false;
     setPickLoading(true);
-    searchItems({ listId: listFilter, lineId: lineFilter, status: "", search, showArchived: false, onlyNestable: true, onlyUnscheduled }, page)
-      .then((r) => {
+    searchItems({ listId: listFilter, lineId: lineFilter, status: "", search, showArchived: false, onlyNestable: true, onlyUnscheduled, thickness: thick }, page)
+      .then(async (r) => {
         if (cancelled) return;
         setRows(r.rows);
         setTotal(r.total);
+        setDiag(r.rows.length === 0 ? await fetchPickerDiagnostics() : "");
       })
       .catch((e) => {
         if (!cancelled) setError(errorText(e));
@@ -145,25 +156,16 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     return () => {
       cancelled = true;
     };
-  }, [ready, listFilter, lineFilter, search, onlyUnscheduled, page, refreshKey]);
+  }, [ready, listFilter, lineFilter, search, onlyUnscheduled, thick, page, refreshKey]);
 
   const available = useCallback((i: ItemBalance) => Math.max(0, i.qty_total - (i.qty_programmed - (own[i.id] ?? 0))), [own]);
 
   function add(i: ItemBalance) {
-    const selectedNow = Object.values(sel);
-    const base = selectedNow[0]?.item;
-    const baseMaterial = (base?.material_code ?? base?.material ?? materialCode ?? material ?? "").trim().toUpperCase();
-    const baseThickness = base?.thickness_mm ?? (thick.trim() ? parseDecimalBR(thick).value : null);
-    const itemMaterial = (i.material_code ?? i.material ?? "").trim().toUpperCase();
-    if (!itemMaterial || i.thickness_mm === null || (baseMaterial && itemMaterial !== baseMaterial) || (baseThickness !== null && i.thickness_mm !== baseThickness)) return;
     setSel((prev) => {
       if (prev[i.id]) return prev;
       const av = available(i);
       return { ...prev, [i.id]: { item: i, qty: av > 0 ? toText(av) : "", allowExcess: false } };
     });
-    if (!materialCode.trim()) setMaterialCode(i.material_code ?? "");
-    if (!material.trim()) setMaterial(i.material ?? "");
-    if (!thick.trim() && i.thickness_mm !== null) setThick(toText(i.thickness_mm));
   }
 
   function remove(id: string) {
@@ -179,9 +181,9 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   }
 
   /** Preenche código, data, chapa, máquina e peças a partir do texto copiado do PDF do nesting. */
-  async function applyPdf() {
+  async function applyPdf(text: string = pdfText) {
     setPdfMsg(null);
-    const r = parseNestingText(pdfText);
+    const r = parseNestingText(text);
     if (r.parts.length === 0 && !r.code) {
       setPdfMsg({ kind: "error", lines: r.warnings });
       return;
@@ -192,6 +194,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       if (r.code) setCode(r.code);
       if (r.date) setDate(r.date);
       if (r.material) setMaterial(r.material);
+      if (r.thickness_mm !== null) setThick(String(r.thickness_mm));
       const guess = r.machine_guess ? machines.find((m) => m.name.toLowerCase() === r.machine_guess?.toLowerCase()) : undefined;
       if (guess) setMachineId(guess.id);
       else lines.push(`Máquina do PDF${r.machine_text ? ` (“${r.machine_text}”)` : ""} não reconhecida: selecione a máquina manualmente.`);
@@ -205,32 +208,47 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       const toAdd: Record<string, Selected> = {};
       const missing: string[] = [];
       const blocked: string[] = [];
-      let groupMaterial = materialCode.trim().toUpperCase() || material.trim().toUpperCase();
-      let groupThickness = thick.trim() ? parseDecimalBR(thick).value : null;
+      const mismatch: string[] = [];
       for (const p of r.parts) {
         const item = byKey.get(`${p.op_number}|${p.item_code.toUpperCase()}`);
-        if (!item) { missing.push(`OP ${p.op_number} / ${p.item_code} (${p.equipment})`); continue; }
-        if (!item.line_allows_nesting) { blocked.push(`OP ${p.op_number} / ${p.item_code} (linha ${item.line_name ?? "?"})`); continue; }
-        const itemMaterial = (item.material_code ?? item.material ?? "").trim().toUpperCase();
-        const itemThickness = item.thickness_mm;
-        if (!itemMaterial || itemThickness === null) { blocked.push(`OP ${p.op_number} / ${p.item_code} (material ou espessura não cadastrados)`); continue; }
-        if (!groupMaterial) groupMaterial = itemMaterial;
-        if (groupThickness === null) groupThickness = itemThickness;
-        if (itemMaterial !== groupMaterial) { blocked.push(`OP ${p.op_number} / ${p.item_code} (material diferente do grupo)`); continue; }
-        if (itemThickness !== groupThickness) { blocked.push(`OP ${p.op_number} / ${p.item_code} (${formatQty(itemThickness)} mm diferente de ${formatQty(groupThickness)} mm)`); continue; }
-        toAdd[item.id] = { item, qty: toText(p.quantity), allowExcess: false };
+        if (!item) missing.push(`OP ${p.op_number} / ${p.item_code} (${p.equipment})`);
+        else if (!item.line_allows_nesting) blocked.push(`OP ${p.op_number} / ${p.item_code} (linha ${item.line_name ?? "?"})`);
+        else {
+          toAdd[item.id] = { item, qty: toText(p.quantity), allowExcess: false };
+          if (r.thickness_mm !== null && item.thickness_mm !== null && Math.abs(Number(item.thickness_mm) - r.thickness_mm) > 0.05) {
+            mismatch.push(`OP ${p.op_number} / ${p.item_code} (${formatMm(Number(item.thickness_mm))} no cadastro, ${formatMm(r.thickness_mm)} no PDF)`);
+          }
+        }
       }
-      if (groupMaterial) { const first = Object.values(toAdd)[0]?.item; setMaterialCode(first?.material_code ?? groupMaterial); setMaterial(first?.material ?? material); }
-      if (groupThickness !== null) setThick(toText(groupThickness));
       setSel((prev) => ({ ...prev, ...toAdd }));
       lines.unshift(`${Object.keys(toAdd).length} peça(s) adicionada(s) de ${r.parts.length} no PDF. Confira as quantidades abaixo.`);
       if (missing.length > 0) lines.push(`Não cadastradas no sistema (importe a lista correspondente e aplique de novo): ${missing.join("; ")}.`);
       if (blocked.length > 0) lines.push(`Linha não aceita nesting: ${blocked.join("; ")}.`);
+      if (mismatch.length > 0) lines.push(`Espessura diferente da chapa do PDF: ${mismatch.join("; ")}.`);
       r.skipped.forEach((s) => lines.push(`Ignorada: ${s}.`));
       r.warnings.forEach((w) => lines.push(w));
-      setPdfMsg({ kind: missing.length > 0 || blocked.length > 0 || !guess ? "warning" : "success", lines });
+      setPdfMsg({ kind: missing.length > 0 || blocked.length > 0 || mismatch.length > 0 || !guess ? "warning" : "success", lines });
     } catch (e) {
       setPdfMsg({ kind: "error", lines: [errorText(e)] });
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  /** Lê o(s) arquivo(s) PDF escolhidos (várias páginas ou vários arquivos do mesmo nesting) e preenche o formulário. */
+  async function onPdfFiles(files: File[]) {
+    if (files.length === 0) return;
+    setPdfBusy(true);
+    setPdfMsg(null);
+    try {
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+      let text = "";
+      for (const f of files) text += (await pdfToText(pdfjs, new Uint8Array(await f.arrayBuffer()))) + "\n";
+      setPdfText(text);
+      await applyPdf(text);
+    } catch (e) {
+      setPdfMsg({ kind: "error", lines: [`Não foi possível ler o PDF: ${errorText(e)}`] });
     } finally {
       setPdfBusy(false);
     }
@@ -240,14 +258,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const totalQty = selected.reduce((sum, s) => sum + (parseDecimalBR(s.qty).value ?? 0), 0);
   const nestableLines = lines.filter((l) => l.allows_nesting);
   const avulsoLists = lists.filter((l) => l.list_type === "Avulsos");
-  const selectedGroup = selected[0]?.item;
-  const groupMaterial = (selectedGroup?.material_code ?? selectedGroup?.material ?? materialCode ?? material ?? "").trim().toUpperCase();
-  const groupThickness = selectedGroup?.thickness_mm ?? (thick.trim() ? parseDecimalBR(thick).value : null);
-
-  function itemMatchesNestingGroup(i: ItemBalance): boolean {
-    const itemMaterial = (i.material_code ?? i.material ?? "").trim().toUpperCase();
-    return Boolean(itemMaterial && i.thickness_mm !== null && (!groupMaterial || itemMaterial === groupMaterial) && (groupThickness === null || i.thickness_mm === groupThickness));
-  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -256,18 +266,8 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     if (!machineId) return setError("Selecione a máquina de corte.");
     let t: number | null = null;
     if (thick.trim() !== "") {
-      t = parseDecimalBR(thick).value;
-      if (t === null || t < 0) return setError("A espessura deve ser um número válido.");
-    }
-    if (selected.length > 0) {
-      if (t === null) return setError("Informe a espessura. Um nesting aceita apenas peças de uma única espessura.");
-      const firstMaterial = (selected[0].item.material_code ?? selected[0].item.material ?? "").trim().toUpperCase();
-      if (!firstMaterial) return setError(`A OP ${selected[0].item.op_number} não possui material cadastrado.`);
-      for (const s of selected) {
-        const itemMaterial = (s.item.material_code ?? s.item.material ?? "").trim().toUpperCase();
-        if (!itemMaterial || itemMaterial !== firstMaterial) return setError(`A OP ${s.item.op_number} possui material diferente. Um nesting não pode misturar materiais.`);
-        if (s.item.thickness_mm === null || s.item.thickness_mm !== t) return setError(`A OP ${s.item.op_number} possui espessura ${formatQty(s.item.thickness_mm)} mm. Este nesting está em ${formatQty(t)} mm.`);
-      }
+      t = Number(thick);
+      if (!Number.isFinite(t) || t <= 0) return setError("A espessura deve ser um número válido.");
     }
     const payload: NestingItemInput[] = [];
     for (const s of selected) {
@@ -286,7 +286,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
         code: code.trim(),
         laser_machine_id: machineId,
         material: emptyToNull(material),
-        material_code: emptyToNull(materialCode || (selected[0]?.item.material_code ?? "")),
         thickness_mm: t,
         programmed_at: emptyToNull(date),
         notes: emptyToNull(notes),
@@ -310,14 +309,50 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
         <section className="card">
           <h2 className="section-title">Preencher a partir do PDF do nesting (opcional)</h2>
           <p className="section-sub">
-            Abra o PDF, selecione tudo (Ctrl+A), copie (Ctrl+C) e cole aqui. Se o nesting tiver mais de uma página, cole o texto de todas. O sistema
-            preenche código, data, chapa, máquina e as peças (a coluna “Chapa” do PDF é a quantidade deste nesting).
+            Escolha o(s) <strong>arquivo(s) PDF</strong> do nesting (se tiver mais de uma página ou arquivo, selecione todos de uma vez) <strong>ou cole o texto</strong> copiado do PDF. O sistema lê a tabela
+            e preenche código, data, chapa, espessura, máquina e as peças (a coluna “Chapa” do PDF é a quantidade deste nesting).
           </p>
-          <textarea className="textarea" style={{ minHeight: 90 }} value={pdfText} onChange={(e) => setPdfText(e.target.value)} aria-label="Texto copiado do PDF do nesting" />
-          <div className="btn-row" style={{ marginTop: 10 }}>
-            <button type="button" className="btn secondary" onClick={() => void applyPdf()} disabled={pdfText.trim() === "" || pdfBusy}>
-              {pdfBusy ? "Lendo..." : "Ler PDF e preencher"}
-            </button>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            disabled={pdfBusy}
+            aria-label="Arquivos PDF do nesting"
+            onChange={(e) => {
+              const files = Array.from((e.target.files ?? []) as ArrayLike<File>);
+              e.target.value = "";
+              void onPdfFiles(files);
+            }}
+          />
+          {pdfBusy && <p className="muted" style={{ marginTop: 8 }}>Lendo o PDF...</p>}
+          <div className="field" style={{ marginTop: 14 }}>
+            <label htmlFor="pdf-text">Ou cole o texto copiado do PDF (Ctrl+A, Ctrl+C no PDF; se tiver mais de uma página, cole todas em sequência)</label>
+            <textarea
+              id="pdf-text"
+              className="textarea"
+              style={{ minHeight: 90 }}
+              value={pdfText}
+              onChange={(e) => setPdfText(e.target.value)}
+              onPaste={(e) => {
+                // ao colar, já preenche o formulário
+                const pasted = e.clipboardData.getData("text");
+                if (pasted.trim() !== "") {
+                  e.preventDefault();
+                  const all = pdfText.trim() === "" ? pasted : `${pdfText}\n${pasted}`;
+                  setPdfText(all);
+                  void applyPdf(all);
+                }
+              }}
+              aria-label="Texto copiado do PDF do nesting"
+            />
+            <div className="btn-row">
+              <button type="button" className="btn secondary" onClick={() => void applyPdf()} disabled={pdfText.trim() === "" || pdfBusy}>
+                Ler texto e preencher
+              </button>
+              <button type="button" className="btn secondary" onClick={() => { setPdfText(""); setPdfMsg(null); }} disabled={pdfBusy}>
+                Limpar texto
+              </button>
+            </div>
           </div>
           {pdfMsg && (
             <div style={{ marginTop: 12 }}>
@@ -341,12 +376,8 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
             <input id="n-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="field">
-            <label htmlFor="n-mat">Material</label>
-            <input id="n-mat" className="input" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Ex.: A36, Inox 304, A572" />
-          </div>
-          <div className="field">
-            <label htmlFor="n-mat-code">Código do material</label>
-            <input id="n-mat-code" className="input" value={materialCode} onChange={(e) => setMaterialCode(e.target.value)} placeholder="Código MP (se houver)" />
+            <label htmlFor="n-mat">Chapa / material</label>
+            <input id="n-mat" className="input" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder='Ex.: 1/2", Inox 12, 16 Galv.' />
           </div>
           <div className="field full">
             <label>Máquina de corte *</label>
@@ -360,8 +391,21 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
             </div>
           </div>
           <div className="field">
-            <label htmlFor="n-thick">Espessura (mm){selected.length > 0 ? " — definida pelas peças" : ""}</label>
-            <input id="n-thick" className="input" inputMode="decimal" value={thick} onChange={(e) => setThick(e.target.value)} />
+            <label htmlFor="n-thick">Espessura da chapa (mm)</label>
+            <select id="n-thick" className="select" value={thick} onChange={(e) => { setThick(e.target.value); setPage(0); }}>
+              <option value="">Todas (sem filtro)</option>
+              {thicknessOptions
+                .filter((o) => o.thickness_mm !== null)
+                .map((o) => (
+                  <option key={o.thickness_mm} value={String(Number(o.thickness_mm))}>
+                    {formatMm(Number(o.thickness_mm))} ({o.items} peça(s))
+                  </option>
+                ))}
+              {thick !== "" && !thicknessOptions.some((o) => o.thickness_mm !== null && String(Number(o.thickness_mm)) === thick) && (
+                <option value={thick}>{formatMm(Number(thick))} (sem peças com saldo)</option>
+              )}
+            </select>
+            <span className="hint">Ao escolher, a busca de peças mostra só peças dessa espessura.</span>
           </div>
           <div className="field" style={{ gridColumn: "span 2" }}>
             <label htmlFor="n-notes">Observações</label>
@@ -372,12 +416,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
 
       <section className="card">
         <h2 className="section-title">Peças neste nesting ({selected.length})</h2>
-        <p className="section-sub">Pode misturar peças de várias listas, mas <strong>não pode misturar material nem espessura</strong>. O primeiro item selecionado define o grupo do nesting.</p>
-        {selected.length > 0 && (
-          <div className="notice success" style={{ marginBottom: 12 }}>
-            <strong>Grupo do nesting:</strong> {materialCode || material || "material não informado"} · {groupThickness !== null ? `${formatQty(groupThickness)} mm` : "espessura não informada"}
-          </div>
-        )}
+        <p className="section-sub">Pode misturar peças de várias listas. Informe quantas peças de cada OP serão cortadas aqui.</p>
         {selected.length === 0 ? (
           <div className="empty">Nenhuma peça selecionada. Use a busca abaixo para adicionar (ou salve sem peças e vincule depois).</div>
         ) : (
@@ -385,7 +424,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Lista</th><th>OP</th><th>Item</th><th>Descrição</th><th className="num">Necessário</th><th className="num">Disponível</th><th>Qtd. neste nesting</th><th></th></tr>
+                  <tr><th>Lista</th><th>OP</th><th>Item</th><th>Matéria-prima</th><th>Espessura</th><th className="num">Necessário</th><th className="num">Disponível</th><th>Qtd. neste nesting</th><th></th></tr>
                 </thead>
                 <tbody>
                   {selected.map((s) => {
@@ -397,7 +436,13 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
                         <td>{listLabel(s.item.list_code, s.item.list_name)}</td>
                         <td><strong>{s.item.op_number}</strong></td>
                         <td>{s.item.item_code ?? "—"}</td>
-                        <td style={{ maxWidth: 240 }}>{s.item.description ?? "—"}</td>
+                        <td style={{ maxWidth: 240 }} className="muted">{s.item.material ?? s.item.description ?? "—"}</td>
+                        <td>
+                          {formatMm(s.item.thickness_mm)}
+                          {thick !== "" && s.item.thickness_mm !== null && Math.abs(Number(s.item.thickness_mm) - Number(thick)) > 0.05 && (
+                            <div><span className="pill amber" title="Espessura da peça diferente da espessura do nesting">≠ nesting</span></div>
+                          )}
+                        </td>
                         <td className="num">{formatQty(s.item.qty_total)}</td>
                         <td className="num">{formatQty(av)}</td>
                         <td style={{ minWidth: 190 }}>
@@ -426,7 +471,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       <section className="card">
         <h2 className="section-title">Buscar peças</h2>
         <p className="section-sub">
-          As peças são separadas por <strong>material + espessura</strong>. Depois que você selecionar a primeira peça, o sistema bloqueia automaticamente qualquer peça de outro grupo. Só aparecem peças de linhas de laser ({nestableLines.map((l) => l.name).join(", ") || "nenhuma habilitada"}).
+          Só aparecem peças de linhas de laser ({nestableLines.map((l) => l.name).join(", ") || "nenhuma habilitada"}).
         </p>
         <div className="toolbar">
           <div className="field grow">
@@ -459,13 +504,17 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
         {pickLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
-          <div className="empty">Nenhuma peça encontrada com esses filtros.</div>
+          <div className="empty">
+            Nenhuma peça encontrada com esses filtros.
+            {diag && <div className="muted" style={{ marginTop: 8 }}>{diag}</div>}
+            <div className="muted">Se “linhas de laser ativas” for 0, habilite a linha em Setores e linhas. Se “itens em linhas de laser” for 0, importe a lista (e o catálogo de itens) antes.</div>
+          </div>
         ) : (
           <>
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th></th><th>Lista</th><th>OP</th><th>Item</th><th>Descrição</th><th>Material</th><th>Esp.</th><th>Linha</th><th className="num">Necessário</th><th className="num" title="Já programado em outros nestings">Em outros</th><th className="num">Disponível</th></tr>
+                  <tr><th></th><th>Lista</th><th>OP</th><th>Item</th><th>Matéria-prima</th><th>Espessura</th><th>Linha</th><th className="num">Necessário</th><th className="num" title="Já programado em outros nestings">Em outros</th><th className="num">Disponível</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((i) => {
@@ -473,16 +522,15 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
                     return (
                       <tr key={i.id}>
                         <td>
-                          <button type="button" className="btn secondary small" disabled={picked || !itemMatchesNestingGroup(i)} onClick={() => add(i)}>
-                            {picked ? "Adicionada" : itemMatchesNestingGroup(i) ? "Adicionar" : "Outro grupo"}
+                          <button type="button" className="btn secondary small" disabled={picked} onClick={() => add(i)}>
+                            {picked ? "Adicionada" : "Adicionar"}
                           </button>
                         </td>
                         <td>{listLabel(i.list_code, i.list_name)}</td>
                         <td><strong>{i.op_number}</strong></td>
                         <td>{i.item_code ?? "—"}</td>
-                        <td style={{ maxWidth: 240 }}>{i.description ?? "—"}</td>
-                        <td>{i.material_code ?? i.material ?? "—"}</td>
-                        <td>{i.thickness_mm !== null ? `${formatQty(i.thickness_mm)} mm` : "—"}</td>
+                        <td style={{ maxWidth: 240 }} className="muted">{i.material ?? i.description ?? "—"}</td>
+                        <td className="nowrap">{formatMm(i.thickness_mm)}</td>
                         <td>{i.line_name ?? "—"}</td>
                         <td className="num">{formatQty(i.qty_total)}</td>
                         <td className="num">{formatQty(i.qty_programmed - (own[i.id] ?? 0))}</td>

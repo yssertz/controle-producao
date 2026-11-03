@@ -1,0 +1,35 @@
+#
+CNC
+x x |**50TDB||65X Y
+x
+Rep.CNC:Aproveitamento:
+Retalho:
+Sucata:
+xPerímetro Ataques Tempounitário%%%kgkgkgImagem
+Descrição x 1 x
+XY Mínimo
+Ref. MP
+PesoMP(kg)Tecnologia Raio do cortador/ Kerf
+OXICORTE
+/
+Distância das tochas
+Data
+( ) Conforme()NãoConformeCorpodeProvaTempo total
+Máquina
+ProgramadorOP Chapa Total Faltam Dimensões Peso EquipamentoOperador Data de Corte
+Referência
+29/10/2026L3321 09:54:55.003000 1200
+2675.667
+00:07:36.78
+984.6
+6.35 Aço Carbono
+Pablo180.59468.435
+27.459
+4.106
+123.5949.5897.415
+Calfran Laser Fiber - 6000 - RODOVIARIO11 00:07:36.78Chapa 1/4" 1200x3000
+0.1 0.2
+2 30450009 7603891 1 1 0 2566.334 x 316.821 39.613 5934 2 00:02:30.82Poli 8423 30450013 7603893 1 1 0 2580 x 322.858 41.351 5851 1 00:02:27.65Poli 849 30450002 7603887 1 1 0 2668.167 x 327.566 42.626 6208 3 00:02:38.31Poli 84(1)0
+23
+2
+9

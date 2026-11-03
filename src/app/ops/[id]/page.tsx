@@ -2,28 +2,28 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { DeleteItemsDialog } from "@/components/DeleteDialogs";
 import { ItemFormModal } from "@/components/ItemFormModal";
 import { BackLink, EmptyState, Loading, Notice, ProgressBar, StatusPill } from "@/components/ui";
-import { ConfirmModal } from "@/components/Modal";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
-import { deleteItem, fetchItem, fetchItemNestings } from "@/lib/items";
+import { fetchItem, fetchItemNestings } from "@/lib/items";
 import { fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { ItemBalance, ItemNestingRow, ProductionLine } from "@/lib/types";
 
 export default function ItemDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { canPlan } = useAuth();
+  const router = useRouter();
+  const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
   const [item, setItem] = useState<ItemBalance | null>(null);
   const [links, setLinks] = useState<ItemNestingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [edit, setEdit] = useState<{ lists: ListOption[]; lines: ProductionLine[] } | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,20 +42,6 @@ export default function ItemDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function removeItem() {
-    if (!item) return;
-    setBusy(true);
-    try {
-      await deleteItem(item.id);
-      window.location.href = "/ops";
-    } catch (e) {
-      setError(errorText(e));
-      setDeleting(false);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function openEdit() {
     try {
@@ -98,7 +84,7 @@ export default function ItemDetailPage() {
                 <button className="btn secondary" onClick={() => void openEdit()}>
                   <Pencil size={14} /> Editar
                 </button>
-                <button className="btn danger-outline" onClick={() => setDeleting(true)}>
+                <button className="btn danger-outline" onClick={() => setDeleteIds([item.id])}>
                   <Trash2 size={14} /> Excluir
                 </button>
               </div>
@@ -169,16 +155,8 @@ export default function ItemDetailPage() {
             )}
           </section>
 
-          {deleting && (
-            <ConfirmModal
-              title="Excluir OP definitivamente"
-              message={<>A OP <strong>{item.op_number}</strong> será excluída permanentemente. Se ela estiver em algum nesting, o sistema bloqueará a exclusão para preservar o histórico.</>}
-              confirmLabel="Excluir definitivamente"
-              danger
-              busy={busy}
-              onConfirm={() => void removeItem()}
-              onCancel={() => setDeleting(false)}
-            />
+          {deleteIds && (
+            <DeleteItemsDialog ids={deleteIds} onClose={() => setDeleteIds(null)} onDone={() => router.push("/ops")} />
           )}
 
           {edit && (

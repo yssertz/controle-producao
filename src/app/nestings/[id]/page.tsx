@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Ban, CheckCircle2, Pencil, Play, RotateCcw, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { DeleteNestingDialog } from "@/components/DeleteDialogs";
 import { ConfirmModal, Modal, ReasonModal } from "@/components/Modal";
 import { BackLink, Loading, Notice, StatusPill } from "@/components/ui";
 import { errorText } from "@/lib/errors";
@@ -12,7 +13,6 @@ import { formatDate, formatDateTime, formatQty, listLabel } from "@/lib/format";
 import { parseDecimalBR } from "@/lib/excel-paste";
 import {
   cancelNesting,
-  deleteNesting,
   completeNesting,
   fetchNesting,
   fetchNestingHistory,
@@ -170,6 +170,8 @@ function describeDetails(h: NestingHistoryRow): string[] {
 export default function NestingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { canPlan, canOperate } = useAuth();
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
   const [nesting, setNesting] = useState<NestingSummary | null>(null);
   const [items, setItems] = useState<NestingItemRow[]>([]);
   const [history, setHistory] = useState<NestingHistoryRow[]>([]);
@@ -178,7 +180,6 @@ export default function NestingDetailPage() {
   const [msg, setMsg] = useState<Message>(null);
   const [action, setAction] = useState<Action>(null);
   const [busy, setBusy] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -197,20 +198,6 @@ export default function NestingDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function removeNesting() {
-    if (!nesting) return;
-    setBusy(true);
-    try {
-      await deleteNesting(nesting.id);
-      window.location.href = "/nestings";
-    } catch (e) {
-      setMsg({ kind: "error", text: errorText(e) });
-      setDeleting(false);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function run(fn: () => Promise<void>, okText: string) {
     setBusy(true);
@@ -250,9 +237,6 @@ export default function NestingDetailPage() {
               {nesting.status === "Programado" && canPlan && (
                 <Link className="btn secondary" href={`/nestings/${nesting.id}/editar`}><Pencil size={14} /> Editar</Link>
               )}
-              {(nesting.status === "Programado" || nesting.status === "Cancelado") && canPlan && (
-                <button className="btn danger-outline" onClick={() => setDeleting(true)}><Trash2 size={14} /> Excluir</button>
-              )}
               {nesting.status === "Programado" && canOperate && (
                 <button className="btn primary" onClick={() => setAction("start")} disabled={items.length === 0} title={items.length === 0 ? "Vincule OPs antes de iniciar" : undefined}>
                   <Play size={14} /> Iniciar corte
@@ -269,6 +253,9 @@ export default function NestingDetailPage() {
               )}
               {(nesting.status === "Programado" || nesting.status === "Em produção") && canPlan && (
                 <button className="btn danger-outline" onClick={() => setAction("cancel")}><Ban size={14} /> Cancelar</button>
+              )}
+              {canPlan && (
+                <button className="btn danger-outline" onClick={() => setDeleting(true)}><Trash2 size={14} /> Excluir</button>
               )}
             </div>
           </div>
@@ -337,17 +324,8 @@ export default function NestingDetailPage() {
           </section>
 
           {deleting && (
-            <ConfirmModal
-              title="Excluir nesting definitivamente"
-              message={<>O nesting <strong>{nesting.code}</strong> será excluído permanentemente, incluindo seus vínculos e histórico. A exclusão só é permitida sem peças cortadas.</>}
-              confirmLabel="Excluir definitivamente"
-              danger
-              busy={busy}
-              onConfirm={() => void removeNesting()}
-              onCancel={() => setDeleting(false)}
-            />
+            <DeleteNestingDialog nestingId={nesting.id} onClose={() => setDeleting(false)} onDone={() => router.push("/nestings")} />
           )}
-
           {action === "start" && (
             <ConfirmModal title="Iniciar corte" message={<>O nesting <strong>{nesting.code}</strong> passará para <strong>Em produção</strong>. Depois disso as OPs e quantidades programadas não poderão mais ser alteradas.</>} confirmLabel="Iniciar corte" busy={busy} onConfirm={() => void run(() => startNesting(nesting.id), "Corte iniciado.")} onCancel={() => setAction(null)} />
           )}

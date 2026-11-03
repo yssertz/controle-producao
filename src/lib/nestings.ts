@@ -61,7 +61,6 @@ export interface NestingInput {
   code: string;
   laser_machine_id: string;
   material: string | null;
-  material_code: string | null;
   thickness_mm: number | null;
   programmed_at: string | null;
   notes: string | null;
@@ -75,7 +74,6 @@ export async function saveNesting(input: NestingInput): Promise<string> {
     p_code: input.code,
     p_laser_machine_id: input.laser_machine_id,
     p_material: input.material,
-    p_material_code: input.material_code,
     p_thickness_mm: input.thickness_mm,
     p_programmed_at: input.programmed_at,
     p_notes: input.notes,
@@ -112,8 +110,4 @@ export async function reopenNesting(id: string, reason: string): Promise<void> {
 /** Próximo código da sequência (L0001, L0002...). */
 export async function fetchNextNestingCode(): Promise<string> {
   return unwrap(await supabase().rpc("next_nesting_code")) as string;
-}
-
-export async function deleteNesting(id: string): Promise<void> {
-  unwrap(await supabase().rpc("delete_nesting", { p_nesting_id: id }));
 }

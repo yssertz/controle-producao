@@ -43,12 +43,16 @@ interface ConfirmProps {
   confirmLabel: string;
   danger?: boolean;
   busy?: boolean;
+  /** Se informado, o usuário precisa digitar exatamente este texto para liberar o botão. */
+  typeToConfirm?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 /** Confirmação para ações que mudam ou escondem dados. */
-export function ConfirmModal({ title, message, confirmLabel, danger, busy, onConfirm, onCancel }: ConfirmProps) {
+export function ConfirmModal({ title, message, confirmLabel, danger, busy, typeToConfirm, onConfirm, onCancel }: ConfirmProps) {
+  const [typed, setTyped] = useState("");
+  const locked = typeToConfirm !== undefined && typed.trim() !== typeToConfirm;
   return (
     <Modal
       title={title}
@@ -58,13 +62,21 @@ export function ConfirmModal({ title, message, confirmLabel, danger, busy, onCon
           <button className="btn secondary" onClick={onCancel} disabled={busy}>
             Voltar
           </button>
-          <button className={danger ? "btn danger" : "btn primary"} onClick={onConfirm} disabled={busy}>
+          <button className={danger ? "btn danger" : "btn primary"} onClick={onConfirm} disabled={busy || locked}>
             {busy ? "Aguarde..." : confirmLabel}
           </button>
         </>
       }
     >
       <div style={{ fontSize: 13, lineHeight: 1.6 }}>{message}</div>
+      {typeToConfirm !== undefined && (
+        <div className="field" style={{ marginTop: 14 }}>
+          <label htmlFor="type-confirm">
+            Para confirmar, digite <strong>{typeToConfirm}</strong>
+          </label>
+          <input id="type-confirm" className="input" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+        </div>
+      )}
     </Modal>
   );
 }

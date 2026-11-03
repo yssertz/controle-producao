@@ -54,7 +54,3 @@ export async function updateList(id: string, input: ListInput): Promise<void> {
 export async function setListStatus(id: string, status: ListStatus): Promise<void> {
   unwrap(await supabase().from("production_lists").update({ status }).eq("id", id));
 }
-
-export async function deleteList(id: string): Promise<void> {
-  unwrap(await supabase().rpc("delete_production_list", { p_list_id: id }));
-}

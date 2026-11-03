@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { guessMachineName, parseNestingText } from "./nesting-text.ts";
 
 // Texto real (pdftotext -layout) do PDF do nesting L3318 (página 2): cabeçalho e linhas da tabela.
@@ -23,6 +24,7 @@ test("parseNestingText: cabeçalho do nesting", () => {
   assert.equal(r.machine_guess, "Laser 6KW");
   assert.equal(r.date, "2026-10-29");
   assert.equal(r.material, 'Chapa 1/4" LNE 2900x1200');
+  assert.equal(r.thickness_mm, 6.35);
 });
 
 test("parseNestingText: peças com OP; corpo de prova (sem OP) é ignorado e avisado", () => {
@@ -30,9 +32,9 @@ test("parseNestingText: peças com OP; corpo de prova (sem OP) é ignorado e avi
   assert.deepEqual(
     r.parts.map((p) => [p.op_number, p.item_code, p.quantity, p.total, p.equipment]),
     [
-      ["7604620", "J028049", 2, 24, "Leniors 83"],
-      ["7603872", "30450070", 1, 11, "Poli 84"],
-      ["7604587", "J007217", 30, 58, "Leniors 83"],
+      ["7604620", "J028049", 2, 24, "Leniors"],
+      ["7603872", "30450070", 1, 11, "Poli"],
+      ["7604587", "J007217", 30, 58, "Leniors"],
     ],
   );
   assert.equal(r.skipped.length, 1);
@@ -51,6 +53,7 @@ test("parseNestingText: texto sem nada útil gera avisos", () => {
   assert.equal(r.code, null);
   assert.equal(r.parts.length, 0);
   assert.equal(r.warnings.length, 2);
+  assert.equal(r.thickness_mm, null);
 });
 
 test("guessMachineName", () => {
@@ -58,4 +61,33 @@ test("guessMachineName", () => {
   assert.equal(guessMachineName("Laser Fiber - 40000"), "Laser 40KW");
   assert.equal(guessMachineName("Linha de Bobina 2"), "Bobina");
   assert.equal(guessMachineName("Guilhotina"), null);
+});
+
+// Resultado REAL de Ctrl+A, Ctrl+C no PDF do nesting L3321 (as linhas da tabela vêm coladas, sem quebras de linha).
+test("parseNestingText: texto copiado do PDF (Ctrl+C) com as linhas coladas", () => {
+  const raw = readFileSync(new URL("./__fixtures__/ctrlc-ctrlv-nesting.txt", import.meta.url), "utf-8");
+  const r = parseNestingText(raw);
+  assert.equal(r.code, "L3321");
+  assert.equal(r.machine_guess, "Laser 6KW");
+  assert.equal(r.date, "2026-10-29");
+  assert.equal(r.material, 'Chapa 1/4" 1200x3000');
+  assert.equal(r.thickness_mm, 6.35);
+  assert.deepEqual(
+    r.parts.map((p) => [p.op_number, p.item_code, p.quantity, p.total]),
+    [
+      ["7603891", "30450009", 1, 1],
+      ["7603893", "30450013", 1, 1],
+      ["7603887", "30450002", 1, 1],
+    ],
+  );
+  assert.equal(r.skipped.length, 0);
+  assert.deepEqual(r.warnings, []);
+});
+
+test("parseNestingText: linha sem OP no meio de texto sem quebras vira ignorada", () => {
+  const txt = "L3999 x 1 30450001 7600001 2 4 0 100 x 50 1.5 300 1 00:00:10.00Poli 842 corpo de prova 1 4 3 100 x 100 0.357 577 2 00:00:15.53Corpo de Prova3 30450002 7600002 5 5 0 10 x 10 1 1 1 00:00:01.00Poli 84";
+  const r = parseNestingText(txt);
+  assert.deepEqual(r.parts.map((p) => [p.op_number, p.item_code, p.quantity]), [["7600001", "30450001", 2], ["7600002", "30450002", 5]]);
+  assert.equal(r.skipped.length, 1);
+  assert.match(r.skipped[0], /corpo de prova/);
 });

@@ -15,9 +15,95 @@
 --   Excedente              = quanto passou do necessário (só existe com autorização explícita)
 -- =====================================================================
 
--- As três views de consulta são criadas somente na migration 0007, depois
--- que o modelo definitivo (listas, linhas, máquinas e colunas ERP) estiver pronto.
--- Não criar versões intermediárias aqui: a migration 0007 define o formato final.
+create or replace view public.production_item_balance
+with (security_invoker = true) as
+select
+  o.id,
+  o.list_id,
+  l.name  as list_name,
+  l.list_type,
+  o.production_line_id,
+  pl.name as line_name,
+  o.op_number,
+  o.item_code,
+  o.description,
+  o.unit,
+  o.equipment_name,
+  o.material,
+  o.thickness_mm,
+  o.due_date,
+  o.status,
+  o.notes,
+  o.archived_at,
+  o.created_at,
+  o.updated_at,
+  o.quantity                                         as qty_total,
+  coalesce(a.qty_programmed, 0)                      as qty_programmed,
+  coalesce(a.qty_cut, 0)                             as qty_cut,
+  greatest(o.quantity - coalesce(a.qty_programmed, 0), 0) as qty_unscheduled,
+  greatest(o.quantity - coalesce(a.qty_cut, 0), 0)        as qty_pending_cut,
+  greatest(coalesce(a.qty_programmed, 0) - o.quantity, 0) as qty_excess_programmed,
+  greatest(coalesce(a.qty_cut, 0) - o.quantity, 0)        as qty_excess_cut
+from public.production_orders o
+left join public.production_lists l  on l.id = o.list_id
+left join public.production_lines pl on pl.id = o.production_line_id
+left join lateral (
+  select
+    sum(case n.status when 'Concluído' then i.quantity_cut else i.quantity_programmed end) as qty_programmed,
+    sum(case when n.status in ('Em produção', 'Concluído') then i.quantity_cut else 0 end) as qty_cut
+  from public.nesting_order_items i
+  join public.nestings n on n.id = i.nesting_id
+  where i.production_order_id = o.id
+    and n.status in ('Programado', 'Em produção', 'Concluído')
+) a on true;
+
+create or replace view public.nesting_summary
+with (security_invoker = true) as
+select
+  n.id,
+  n.code,
+  n.list_id,
+  l.name       as list_name,
+  l.list_type,
+  n.laser_machine_id,
+  m.name       as machine_name,
+  n.material,
+  n.thickness_mm,
+  n.status,
+  n.programmed_at,
+  n.notes,
+  n.created_at,
+  n.started_at,
+  n.completed_at,
+  coalesce(s.items_count, 0)::integer as items_count,
+  coalesce(s.qty_programmed, 0)       as qty_programmed,
+  coalesce(s.qty_cut, 0)              as qty_cut
+from public.nestings n
+left join public.production_lists l on l.id = n.list_id
+left join public.laser_machines m   on m.id = n.laser_machine_id
+left join lateral (
+  select count(*) as items_count,
+         sum(i.quantity_programmed) as qty_programmed,
+         sum(i.quantity_cut) as qty_cut
+  from public.nesting_order_items i
+  where i.nesting_id = n.id
+) s on true;
+
+create or replace view public.production_list_summary
+with (security_invoker = true) as
+select
+  l.id,
+  l.name,
+  l.list_type,
+  l.reference_date,
+  l.status,
+  l.notes,
+  l.created_at,
+  l.updated_at,
+  (select count(*) from public.production_orders o where o.list_id = l.id and o.archived_at is null)::integer as items_count,
+  (select coalesce(sum(o.quantity), 0) from public.production_orders o where o.list_id = l.id and o.archived_at is null) as qty_total,
+  (select count(*) from public.nestings n where n.list_id = l.id and n.status <> 'Cancelado')::integer as nestings_count
+from public.production_lists l;
 
 -- ---------------------------------------------------------------------
 -- DASHBOARD
@@ -192,5 +278,12 @@ end $$;
 -- ---------------------------------------------------------------------
 -- PERMISSÕES: somente usuários logados
 -- ---------------------------------------------------------------------
+revoke all on public.production_item_balance from anon;
+revoke all on public.nesting_summary from anon;
+revoke all on public.production_list_summary from anon;
+grant select on public.production_item_balance to authenticated;
+grant select on public.nesting_summary to authenticated;
+grant select on public.production_list_summary to authenticated;
+
 revoke all on function public.dashboard_summary(date, date, uuid, uuid, text, text, uuid) from public, anon;
 grant execute on function public.dashboard_summary(date, date, uuid, uuid, text, text, uuid) to authenticated;

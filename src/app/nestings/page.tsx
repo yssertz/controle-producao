@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { DeleteNestingDialog } from "@/components/DeleteDialogs";
 import { EmptyState, Loading, Notice, PageHeader, Pagination, StatusPill } from "@/components/ui";
 import { NESTING_STATUSES } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
-import { deleteNesting, searchNestings, type NestingFilters } from "@/lib/nestings";
+import { searchNestings, type NestingFilters } from "@/lib/nestings";
 import { fetchLaserMachines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { LaserMachine, NestingSummary } from "@/lib/types";
-import { ConfirmModal } from "@/components/Modal";
 
 function NestingsContent() {
   const { canPlan } = useAuth();
@@ -26,8 +26,8 @@ function NestingsContent() {
   const [machines, setMachines] = useState<LaserMachine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [deleting, setDeleting] = useState<NestingSummary | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([fetchListOptions(true), fetchLaserMachines(false)])
@@ -51,6 +51,10 @@ function NestingsContent() {
     setError("");
     try {
       const res = await searchNestings(filters, page);
+      if (res.rows.length === 0 && page > 0) {
+        setPage(page - 1); // a página ficou vazia (ex.: após excluir)
+        return;
+      }
       setRows(res.rows);
       setTotal(res.total);
     } catch (e) {
@@ -63,20 +67,6 @@ function NestingsContent() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function removeNesting(nesting: NestingSummary) {
-    setBusy(true);
-    try {
-      await deleteNesting(nesting.id);
-      setDeleting(null);
-      await load();
-    } catch (e) {
-      setError(errorText(e));
-      setDeleting(null);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   function changeFilter(patch: Partial<NestingFilters>) {
     setFilters((f) => ({ ...f, ...patch }));
@@ -103,6 +93,7 @@ function NestingsContent() {
         }
       />
       {error && <Notice kind="error">{error}</Notice>}
+      {success && <Notice kind="success" onClose={() => setSuccess("")}>{success}</Notice>}
 
       <div className="toolbar">
         <div className="field grow">
@@ -161,7 +152,7 @@ function NestingsContent() {
                   <th className="num">Programado</th>
                   <th className="num">Cortado</th>
                   <th>Status</th>
-                  <th>Ações</th>
+                  {canPlan && <th>Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -170,19 +161,19 @@ function NestingsContent() {
                     <td><Link className="link" href={`/nestings/${n.id}`}>{n.code}</Link></td>
                     <td style={{ maxWidth: 260 }}>{n.list_names ?? <span className="muted">sem OPs</span>}</td>
                     <td>{n.machine_name ?? <span className="pill red">Sem máquina</span>}</td>
-                    <td>{n.material_code ?? n.material ?? "—"}{n.thickness_mm !== null ? ` · ${formatQty(n.thickness_mm)} mm` : ""}</td>
+                    <td>{n.material ?? "—"}{n.thickness_mm ? ` · ${formatQty(n.thickness_mm)} mm` : ""}</td>
                     <td>{formatDate(n.programmed_at)}</td>
                     <td className="num">{n.items_count}</td>
                     <td className="num">{formatQty(n.qty_programmed)}</td>
                     <td className="num">{formatQty(n.qty_cut)}</td>
                     <td><StatusPill status={n.status} /></td>
-                    <td>
-                      {canPlan && (n.status === "Programado" || n.status === "Cancelado") && (
-                        <button className="btn danger-outline small" onClick={() => setDeleting(n)}>
+                    {canPlan && (
+                      <td>
+                        <button className="btn danger-outline small" onClick={() => setDeletingId(n.id)}>
                           <Trash2 size={12} /> Excluir
                         </button>
-                      )}
-                    </td>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -191,16 +182,15 @@ function NestingsContent() {
           <Pagination page={page} total={total} onPage={setPage} />
         </>
       )}
-
-      {deleting && (
-        <ConfirmModal
-          title="Excluir nesting definitivamente"
-          message={<>O nesting <strong>{deleting.code}</strong> será excluído permanentemente, incluindo seus vínculos e histórico. A exclusão só é permitida quando ele está Programado ou Cancelado e nenhuma peça foi cortada.</>}
-          confirmLabel="Excluir definitivamente"
-          danger
-          busy={busy}
-          onConfirm={() => void removeNesting(deleting)}
-          onCancel={() => setDeleting(null)}
+      {deletingId && (
+        <DeleteNestingDialog
+          nestingId={deletingId}
+          onClose={() => setDeletingId(null)}
+          onDone={(text) => {
+            setDeletingId(null);
+            setSuccess(text);
+            void load();
+          }}
         />
       )}
     </main>

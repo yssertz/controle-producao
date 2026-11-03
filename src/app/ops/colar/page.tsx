@@ -9,6 +9,7 @@ import { BackLink, Loading, Notice } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { PASTE_COLUMNS, findRepeatedInPaste, itemKey, parsePaste, validateFields, type ParsedRow } from "@/lib/excel-paste";
 import { listLabel } from "@/lib/format";
+import { formatMm, parseThicknessMm } from "@/lib/thickness";
 import { fetchExistingKeys, importItemsErp, resolveLines } from "@/lib/items";
 import { fetchErpCodes, fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { ProductionLine, ResolvedLine } from "@/lib/types";
@@ -165,6 +166,7 @@ function ColarContent() {
           material: r.material,
           item_unit: r.item_unit,
           erp_line_code: r.erp_line_code,
+          thickness_mm: parseThicknessMm(r.material),
         })),
         defaultLineId || null,
         skipDup,
@@ -292,7 +294,7 @@ function ColarContent() {
             </button>
           </div>
           <p className="muted" style={{ marginTop: 10 }}>
-            A linha de cada item vem da coluna “Linha” da planilha (se colada) ou do catálogo. Duplicidade: mesma lista + OP + Código do item + Código MP. A mesma OP e item com matéria-prima diferente NÃO é duplicada. Linhas vazias e valores “#N/A” são tratados como vazios.
+            A linha de cada item vem da coluna “Linha” da planilha (se colada) ou do catálogo. A espessura (mm) é calculada da descrição da matéria-prima (ex.: “3/8” ou “(9,50 mm)” → 9,5 mm; “CHAPA 8” → bitola 8 = 4,17 mm) e permite filtrar as peças do laser. Duplicidade: mesma lista + OP + Código do item + Código MP. A mesma OP e item com matéria-prima diferente NÃO é duplicada. Linhas vazias e valores “#N/A” são tratados como vazios.
           </p>
         </section>
 
@@ -332,7 +334,7 @@ function ColarContent() {
               <div className="table-wrap" style={{ maxHeight: 520, overflowY: "auto" }}>
                 <table>
                   <thead>
-                    <tr><th>Linha</th><th>OP</th><th>Qtde</th><th>Código</th><th>Descrição</th><th>Matéria-prima</th><th>Linha de produção</th><th>Situação</th><th></th></tr>
+                    <tr><th>Linha</th><th>OP</th><th>Código</th><th>Qtde</th><th>Matéria-prima</th><th>Espessura</th><th>Linha de produção</th><th>Situação</th><th></th></tr>
                   </thead>
                   <tbody>
                     {shown.map(({ r, idx }) => {
@@ -352,10 +354,18 @@ function ColarContent() {
                         <tr key={`${r.line}-${idx}`} className={cls}>
                           <td>{r.line}</td>
                           <td>{cell("op_number", 90)}</td>
+                          <td>
+                            {cell("item_code", 100)}
+                            {r.description && <div className="cell-msg muted" title="Descrição da peça (não é usada nos filtros)">{r.description}</div>}
+                          </td>
                           <td>{cell("quantity_text", 60)}</td>
-                          <td>{cell("item_code", 100)}</td>
-                          <td>{cell("description", 200)}</td>
-                          <td className="muted" style={{ maxWidth: 200 }}>{r.material_code}{r.material ? ` · ${r.material}` : ""}</td>
+                          <td className="muted" style={{ maxWidth: 220 }}>{r.material || "—"}{r.material_code ? ` (${r.material_code})` : ""}</td>
+                          <td className="nowrap">
+                            {(() => {
+                              const t = parseThicknessMm(r.material);
+                              return t === null ? <span className="muted">—</span> : <strong>{formatMm(t)}</strong>;
+                            })()}
+                          </td>
                           <td>{i.lineName ?? <span className="pill gray">Sem linha</span>}</td>
                           <td style={{ minWidth: 200 }}>
                             {r.errors.map((e) => <div key={e} className="cell-msg err">{e}</div>)}
