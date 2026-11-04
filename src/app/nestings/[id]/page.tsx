@@ -63,7 +63,19 @@ function CutModal({
     setError("");
     if (anyInvalid) return setError("Corrija as quantidades destacadas: use zero ou mais, sem ultrapassar o programado.");
     if (mode === "complete" && !confirmed) return setError("Marque a confirmação de que conferiu as quantidades.");
-    const payload: CutInput[] = parsed.map((p) => ({ production_order_id: p.item.production_order_id, quantity_cut: p.value as number }));
+    // A RPC espera o UUID da chave primária de production_orders, nunca o número visível da OP.
+    // Use o id da relação carregada e valide antes de enviar para evitar converter "7.604.497" em UUID.
+    const invalidId = parsed.find((p) => {
+      const id = p.item.production_orders?.id;
+      return !id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+    });
+    if (invalidId) {
+      return setError(`Não foi possível identificar o UUID interno da OP ${invalidId.item.production_orders?.op_number ?? ""}. Atualize a página e tente novamente.`);
+    }
+    const payload: CutInput[] = parsed.map((p) => ({
+      production_order_id: p.item.production_orders!.id,
+      quantity_cut: p.value as number,
+    }));
     setBusy(true);
     try {
       if (mode === "complete") {
