@@ -74,6 +74,8 @@ export async function saveNesting(input: NestingInput): Promise<string> {
     p_code: input.code,
     p_laser_machine_id: input.laser_machine_id,
     p_material: input.material,
+    p_material_code: null,
+    p_sheet_material_type: input.sheet_material_type,
     p_thickness_mm: input.thickness_mm,
     p_programmed_at: input.programmed_at,
     p_notes: input.notes,

@@ -102,6 +102,8 @@ export interface NestingSummary {
   laser_machine_id: string | null;
   machine_name: string | null;
   material: string | null;
+  material_code?: string | null;
+  sheet_material_type: string | null;
   thickness_mm: number | null;
   status: NestingStatus;
   programmed_at: string | null;
