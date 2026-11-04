@@ -8,8 +8,11 @@ export const SHEET_MATERIAL_TYPES = [
 ] as const;
 export type SheetMaterialType = (typeof SHEET_MATERIAL_TYPES)[number]["value"];
 export function classifyProductionMaterial(material: string | null | undefined): SheetMaterialType | null {
-  const value = (material ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  const value = (material ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
   if (!value) return null;
+  // Códigos de matéria-prima usados no cadastro do ERP.
+  if (/(^|[^0-9])25096([^0-9]|$)/.test(value)) return "A36_SAE1010_20_LNE";
+  if (/(^|[^0-9])22630([^0-9]|$)/.test(value)) return "A36_SAE1010_20_NORMAL";
   if (/\bLNE\b|LNE[- ]?\d/.test(value)) return "A36_SAE1010_20_LNE";
   if (/ASTM[\s-]*A[\s-]*36|SAE\s*1010\s*\/\s*20/.test(value)) return "A36_SAE1010_20_NORMAL";
   if (/GALVANIZ/.test(value)) return "GALVANIZADA";
