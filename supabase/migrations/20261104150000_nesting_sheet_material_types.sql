@@ -10,7 +10,7 @@ returns text language plpgsql immutable set search_path=public as $$
 declare v text := upper(coalesce(p_material,''));
 begin
  if v='' then return null; end if;
- if v ~ '\\mLNE\\M|LNE[- ]?[0-9]' then return 'A36_SAE1010_20_LNE'; end if;
+ if v ~ '(^|[^A-Z0-9])LNE([^A-Z0-9]|$)|LNE[- ]?[0-9]' then return 'A36_SAE1010_20_LNE'; end if;
  if v ~ 'ASTM[ -]*A[ -]*36|SAE[[:space:]]*1010[[:space:]]*/[[:space:]]*20' then return 'A36_SAE1010_20_NORMAL'; end if;
  if v like '%GALVANIZ%' then return 'GALVANIZADA'; end if;
  if v like '%INOX%' or v ~ 'AISI[[:space:]]*30[24]' then return 'INOX'; end if;
