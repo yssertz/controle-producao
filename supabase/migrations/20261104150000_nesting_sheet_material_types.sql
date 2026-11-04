@@ -89,4 +89,6 @@ left join lateral (
  from public.nesting_order_items i join public.production_orders o on o.id=i.production_order_id
  left join public.production_lists l on l.id=o.list_id where i.nesting_id=n.id
 )s on true;
+revoke all on function public.save_nesting(uuid,text,uuid,text,text,text,numeric,date,text,jsonb) from public, anon;
+grant execute on function public.save_nesting(uuid,text,uuid,text,text,text,numeric,date,text,jsonb) to authenticated;
 grant execute on function public.cgp_classify_sheet_material(text) to authenticated;
