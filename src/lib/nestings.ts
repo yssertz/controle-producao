@@ -61,6 +61,7 @@ export interface NestingInput {
   code: string;
   laser_machine_id: string;
   material: string | null;
+  sheet_material_type: string;
   thickness_mm: number | null;
   programmed_at: string | null;
   notes: string | null;
