@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { ITEM_STATUSES, NESTING_STATUSES } from "@/lib/constants";
 import { EMPTY_DASHBOARD_FILTERS, fetchDashboard, hasActiveFilters, type DashboardFilters } from "@/lib/dashboard";
 import { errorText } from "@/lib/errors";
@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [machines, setMachines] = useState<LaserMachine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchListOptions(true), fetchLines(false), fetchLaserMachines(false)])
@@ -70,15 +71,20 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow="Painel de controle"
         title="Visão geral da produção"
-        subtitle="Indicadores calculados com os dados reais do Supabase e com os filtros abaixo."
+        subtitle="Acompanhe listas, produção e corte a laser em um só lugar."
         actions={
-          <button className="btn secondary" onClick={() => void load()} disabled={loading}>
-            <RefreshCw size={14} /> Atualizar
-          </button>
+          <div className="btn-row">
+            <button className="btn secondary" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen}>
+              <SlidersHorizontal size={14} /> Filtros{filtered ? " (ativos)" : ""} <ChevronDown size={14} />
+            </button>
+            <button className="btn secondary" onClick={() => void load()} disabled={loading}>
+              <RefreshCw size={14} /> Atualizar
+            </button>
+          </div>
         }
       />
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      {filtersOpen && <div className="card" style={{ marginBottom: 16 }}>
         <div className="toolbar" style={{ marginBottom: 0 }}>
           <div className="field">
             <label htmlFor="d-from">Período: de</label>
@@ -130,7 +136,7 @@ export default function DashboardPage() {
         <p className="muted" style={{ marginTop: 10 }}>
           Período: data de criação (nestings concluídos usam a data de conclusão). Status do item e linha afetam os indicadores de itens; status do nesting e máquina afetam os de laser.
         </p>
-      </div>
+      </div>}
 
       {error && <Notice kind="error">{error}</Notice>}
 
