@@ -15,6 +15,7 @@ import { parseNestingText } from "@/lib/nesting-text";
 import { fetchNesting, fetchNestingItems, fetchNextNestingCode, saveNesting, type NestingItemInput } from "@/lib/nestings";
 import { fetchLaserMachines, fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { ItemBalance, LaserMachine, ProductionLine } from "@/lib/types";
+import { SHEET_MATERIAL_TYPES, classifyProductionMaterial, isMaterialCompatible, type SheetMaterialType } from "@/lib/sheet-materials";
 
 interface Selected {
   item: ItemBalance;
@@ -40,6 +41,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const [code, setCode] = useState("");
   const [machineId, setMachineId] = useState("");
   const [material, setMaterial] = useState("");
+  const [sheetMaterialType, setSheetMaterialType] = useState<SheetMaterialType | "">("");
   const [thick, setThick] = useState("");
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -88,6 +90,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
           setCode(n.code);
           setMachineId(n.laser_machine_id ?? "");
           setMaterial(n.material ?? "");
+          setSheetMaterialType((n.sheet_material_type ?? "") as SheetMaterialType | "");
           setThick(n.thickness_mm !== null ? String(Number(n.thickness_mm)) : "");
           setDate(n.programmed_at ?? "");
           setNotes(n.notes ?? "");
@@ -194,6 +197,12 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       if (r.code) setCode(r.code);
       if (r.date) setDate(r.date);
       if (r.material) setMaterial(r.material);
+      const inferredSheetType = classifyProductionMaterial(r.material);
+      const effectiveSheetType = sheetMaterialType || inferredSheetType || "";
+      if (inferredSheetType) {
+        if (sheetMaterialType && sheetMaterialType !== inferredSheetType) lines.push("O material identificado no PDF difere do tipo selecionado. Mantive sua seleção; confira antes de salvar.");
+        else setSheetMaterialType(inferredSheetType);
+      }
       if (r.thickness_mm !== null) setThick(String(r.thickness_mm));
       const guess = r.machine_guess ? machines.find((m) => m.name.toLowerCase() === r.machine_guess?.toLowerCase()) : undefined;
       if (guess) setMachineId(guess.id);
@@ -213,6 +222,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
         const item = byKey.get(`${p.op_number}|${p.item_code.toUpperCase()}`);
         if (!item) missing.push(`OP ${p.op_number} / ${p.item_code} (${p.equipment})`);
         else if (!item.line_allows_nesting) blocked.push(`OP ${p.op_number} / ${p.item_code} (linha ${item.line_name ?? "?"})`);
+        else if (!isMaterialCompatible(effectiveSheetType, item.material)) blocked.push(`OP ${p.op_number} / ${p.item_code} (material incompatível com a chapa)`);
         else {
           toAdd[item.id] = { item, qty: toText(p.quantity), allowExcess: false };
           if (r.thickness_mm !== null && item.thickness_mm !== null && Math.abs(Number(item.thickness_mm) - r.thickness_mm) > 0.05) {
@@ -223,7 +233,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       setSel((prev) => ({ ...prev, ...toAdd }));
       lines.unshift(`${Object.keys(toAdd).length} peça(s) adicionada(s) de ${r.parts.length} no PDF. Confira as quantidades abaixo.`);
       if (missing.length > 0) lines.push(`Não cadastradas no sistema (importe a lista correspondente e aplique de novo): ${missing.join("; ")}.`);
-      if (blocked.length > 0) lines.push(`Linha não aceita nesting: ${blocked.join("; ")}.`);
+      if (blocked.length > 0) lines.push(`Peças bloqueadas por linha ou material incompatível: ${blocked.join("; ")}.`);
       if (mismatch.length > 0) lines.push(`Espessura diferente da chapa do PDF: ${mismatch.join("; ")}.`);
       r.skipped.forEach((s) => lines.push(`Ignorada: ${s}.`));
       r.warnings.forEach((w) => lines.push(w));
@@ -264,6 +274,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     setError("");
     if (!NESTING_CODE_REGEX.test(code.trim().toUpperCase())) return setError("Código inválido. Use a sequência L0001, L0002... (letra L e 4 ou mais dígitos).");
     if (!machineId) return setError("Selecione a máquina de corte.");
+    if (!sheetMaterialType) return setError("Selecione o tipo da chapa.");
     let t: number | null = null;
     if (thick.trim() !== "") {
       t = Number(thick);
@@ -271,6 +282,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     }
     const payload: NestingItemInput[] = [];
     for (const s of selected) {
+      if (!isMaterialCompatible(sheetMaterialType, s.item.material)) return setError(`A OP ${s.item.op_number} possui material incompatível ou não identificado para a chapa selecionada.`);
       const q = parseDecimalBR(s.qty).value;
       const av = available(s.item);
       if (q === null || q <= 0) return setError(`Informe uma quantidade maior que zero para a OP ${s.item.op_number}.`);
@@ -286,6 +298,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
         code: code.trim(),
         laser_machine_id: machineId,
         material: emptyToNull(material),
+        sheet_material_type: sheetMaterialType,
         thickness_mm: t,
         programmed_at: emptyToNull(date),
         notes: emptyToNull(notes),
@@ -376,8 +389,15 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
             <input id="n-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="field">
-            <label htmlFor="n-mat">Chapa / material</label>
-            <input id="n-mat" className="input" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder='Ex.: 1/2", Inox 12, 16 Galv.' />
+            <label htmlFor="n-sheet-type">Tipo da chapa *</label>
+            <select id="n-sheet-type" className="select" value={sheetMaterialType} onChange={(e) => setSheetMaterialType(e.target.value as SheetMaterialType | "")}>
+              <option value="">Selecione o tipo</option>
+              {SHEET_MATERIAL_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="n-mat">Descrição da chapa</label>
+            <input id="n-mat" className="input" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder='Ex.: 1/2", LNE-38, 16 Galv.' />
           </div>
           <div className="field full">
             <label>Máquina de corte *</label>
@@ -519,11 +539,12 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
                 <tbody>
                   {rows.map((i) => {
                     const picked = Boolean(sel[i.id]);
+                    const compatible = isMaterialCompatible(sheetMaterialType, i.material);
                     return (
                       <tr key={i.id}>
                         <td>
-                          <button type="button" className="btn secondary small" disabled={picked} onClick={() => add(i)}>
-                            {picked ? "Adicionada" : "Adicionar"}
+                          <button type="button" className="btn secondary small" disabled={picked || !compatible} onClick={() => add(i)}>
+                            {picked ? "Adicionada" : compatible ? "Adicionar" : "Material incompatível"}
                           </button>
                         </td>
                         <td>{listLabel(i.list_code, i.list_name)}</td>
