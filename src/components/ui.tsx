@@ -59,6 +59,7 @@ const TONES: Record<string, string> = {
   Aguardando: "gray",
   "Em produção": "amber",
   Parcial: "amber",
+  Fabricada: "blue",
   Concluída: "green",
   Concluído: "green",
   Bloqueada: "red",

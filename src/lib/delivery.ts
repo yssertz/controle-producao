@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { unwrap } from "./errors";
 import { fetchAll } from "./fetch-all";
 import type { ItemBalance } from "./types";
+import { opNumberVariants } from "./op-number";
 
 export interface ProductionDelivery {
   id: string;
@@ -30,11 +31,13 @@ export interface ProductionScrapReport {
 }
 
 export async function fetchItemsByOpNumber(opNumber: string): Promise<ItemBalance[]> {
+  const variants = opNumberVariants(opNumber);
+  if (!variants.length) return [];
   return fetchAll<ItemBalance>((from, to) =>
     supabase()
       .from("production_item_balance")
       .select("*")
-      .eq("op_number", opNumber.trim())
+      .in("op_number", variants)
       .is("archived_at", null)
       .order("item_code")
       .range(from, to),

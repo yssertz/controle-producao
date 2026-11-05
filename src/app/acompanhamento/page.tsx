@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { DeliveryTracking, OpProductionLookup, ScrapTracking } from "@/components/OpTracking";
-import { EmptyState, Loading, Notice, PageHeader } from "@/components/ui";
+import { EmptyState, Loading, Notice, PageHeader, ProgressBar } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
-import { fetchProgress, percent, type ProgressRow } from "@/lib/progress";
+import { fetchProcessLineProgress, fetchProgress, percent, type ProgressRow } from "@/lib/progress";
+import { aggregateLineProcesses, processKey, totalProcessProgress } from "@/lib/production-dashboard";
 
 function cellClass(p: number | null): string {
   if (p === null) return "pill gray";
@@ -22,7 +23,9 @@ function fmtPct(p: number | null): string {
 
 export default function AcompanhamentoPage() {
   const [tab, setTab] = useState<"producao" | "entrega" | "refugo">("producao");
+  const [productionTab, setProductionTab] = useState<"processos" | "laser" | "listas">("processos");
   const [rows, setRows] = useState<ProgressRow[]>([]);
+  const [processRowsRaw, setProcessRowsRaw] = useState<Awaited<ReturnType<typeof fetchProcessLineProgress>>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [onlyOpen, setOnlyOpen] = useState(true);
@@ -31,7 +34,9 @@ export default function AcompanhamentoPage() {
     setLoading(true);
     setError("");
     try {
-      setRows(await fetchProgress());
+      const [progress, processes] = await Promise.all([fetchProgress(), fetchProcessLineProgress()]);
+      setRows(progress);
+      setProcessRowsRaw(processes);
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -59,6 +64,11 @@ export default function AcompanhamentoPage() {
   }, [rows, onlyOpen]);
 
   const cell = useMemo(() => new Map(rows.map((r) => [`${r.list_id}|${r.line_id}`, r])), [rows]);
+  const processRows = useMemo(() => aggregateLineProcesses(processRowsRaw), [processRowsRaw]);
+  const laserRows = useMemo(() => processRows.filter((row) => processKey(row.line_name).includes("laser")), [processRows]);
+  const visibleProcessRows = productionTab === "laser" ? laserRows : processRows;
+  const fabrication = useMemo(() => totalProcessProgress(processRows, "Fabricação"), [processRows]);
+  const folding = useMemo(() => totalProcessProgress(processRows, "Dobra"), [processRows]);
 
   return (
     <main className="content">
@@ -94,25 +104,80 @@ export default function AcompanhamentoPage() {
 
       {tab === "producao" && <>
       <OpProductionLookup />
-      <div className="toolbar">
+      <div className="btn-row" role="tablist" aria-label="Painel de produção" style={{ margin: "14px 0" }}>
+        {([ ["processos", "Processos"], ["laser", "Laser"], ["listas", "Por lista"] ] as const).map(([value, label]) => (
+          <button key={value} type="button" role="tab" aria-selected={productionTab === value}
+            className={productionTab === value ? "pill blue" : "pill gray"}
+            style={{ border: 0, cursor: "pointer", fontSize: 13, padding: "7px 14px" }}
+            onClick={() => setProductionTab(value)}>{label}</button>
+        ))}
+      </div>
+
+      {productionTab !== "listas" && <div className="toolbar">
         <label className="checkbox" style={{ paddingBottom: 9 }}>
           <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />
-          Só listas em andamento (ocultar as 100%)
+          Ocultar processos 100% concluídos
         </label>
-      </div>
+      </div>}
 
       {loading ? (
         <Loading />
-      ) : rows.length === 0 ? (
+      ) : productionTab === "listas" && rows.length === 0 ? (
         <div className="card">
           <EmptyState title="Nada para acompanhar ainda">Importe uma lista em “OPs e peças → Colar do Excel”: os itens com linha de produção aparecem aqui.</EmptyState>
         </div>
-      ) : lists.length === 0 ? (
+      ) : productionTab === "listas" && lists.length === 0 ? (
         <div className="card">
           <EmptyState title="Todas as listas estão 100%">Desmarque o filtro para ver as concluídas.</EmptyState>
         </div>
+      ) : productionTab !== "listas" && visibleProcessRows.length === 0 ? (
+        <div className="card"><EmptyState title={productionTab === "laser" ? "Nenhum processo laser encontrado" : "Nenhum processo encontrado"} /></div>
+      ) : productionTab !== "listas" ? (
+        <>
+          {productionTab === "processos" && <div className="grid two" style={{ marginBottom: 14 }}>
+            {([["Fabricação", fabrication], ["Dobra", folding]] as const).map(([label, total]) => (
+              <section className="card" key={label}>
+                <div className="eyebrow">Gargalo · {label}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 6 }}>
+                  <strong style={{ fontSize: 26 }}>{fmtPct(percent(total.qty_done, total.qty_total))}</strong>
+                  <span className="muted">{formatQty(total.qty_done)} de {formatQty(total.qty_total)} peças-processo</span>
+                </div>
+                <ProgressBar value={percent(total.qty_done, total.qty_total) ?? 0} tone={(percent(total.qty_done, total.qty_total) ?? 0) >= 100 ? "green" : "blue"} />
+                <div className="muted" style={{ marginTop: 6 }}>{total.items} etapas de OP · {formatQty(Math.max(0, total.qty_total - total.qty_done))} pendentes</div>
+              </section>
+            ))}
+          </div>}
+          {productionTab === "laser" && <section className="card" style={{ marginBottom: 14 }}>
+            <h2 className="section-title">Acompanhamento exclusivo das linhas laser</h2>
+            <p className="section-sub">Corte conta como fabricado quando o nesting é concluído. Em linhas laser compostas, cada processo segue sua própria baixa. Entregue só aparece após a baixa integral da OP.</p>
+          </section>}
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Linha</th><th>Processo</th><th className="num">OPs</th><th className="num">Necessário</th><th className="num">Fabricado</th><th className="num">Entregue</th><th className="num">Pendente</th><th>Avanço</th></tr></thead>
+              <tbody>
+                {visibleProcessRows.filter((r) => !onlyOpen || r.qty_done < r.qty_total).map((r) => {
+                  const p = percent(r.qty_done, r.qty_total);
+                  return <tr key={`${r.line_name}|${processKey(r.process_name)}`}>
+                    <td><strong>{r.line_name}</strong></td><td>{r.process_name}</td>
+                    <td className="num">{r.items}</td><td className="num">{formatQty(r.qty_total)}</td>
+                    <td className="num">{formatQty(r.qty_done)}</td><td className="num">{formatQty(r.qty_delivered)}</td>
+                    <td className="num">{formatQty(Math.max(0, r.qty_total - r.qty_done))}</td>
+                    <td><span className={cellClass(p)}>{fmtPct(p)}</span></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="muted" style={{ marginTop: 10 }}>Os totais somam o volume de cada etapa (peças-processo), para comparar filas e identificar gargalos. Dobra agrega todas as linhas; Fabricação agrega os demais processos.</p>
+        </>
       ) : (
         <>
+          <div className="toolbar">
+            <label className="checkbox" style={{ paddingBottom: 9 }}>
+              <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />
+              Só listas em andamento (ocultar as 100%)
+            </label>
+          </div>
           <div className="table-wrap">
             <table>
               <thead>
@@ -158,10 +223,7 @@ export default function AcompanhamentoPage() {
               </tbody>
             </table>
           </div>
-          <p className="muted" style={{ marginTop: 10 }}>
-            Percentual = peças produzidas ÷ peças necessárias da linha. Linhas de laser “puras” (6KW, 12KW, 40KW) contam as peças <strong>cortadas nos nestings</strong>; as demais
-            (GEKA, guilhotina, serra, usinagem, dobra…) contam o que for <strong>apontado</strong>. O total da lista é ponderado pela quantidade de peças.
-          </p>
+          <p className="muted" style={{ marginTop: 10 }}>Percentual por lista/linha segue o acompanhamento legado da produção. Use as abas Processos e Laser para o volume por etapa e a separação entre fabricação e entrega.</p>
         </>
       )}
       </>}

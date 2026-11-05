@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { unwrap } from "./errors";
 import { fetchAll } from "./fetch-all";
 import { PAGE_SIZE } from "./constants";
+import type { ProcessLineProgressRow } from "./production-dashboard";
 
 export interface ProgressRow {
   list_id: string;
@@ -26,6 +27,13 @@ export function percent(done: number, total: number): number | null {
 export async function fetchProgress(): Promise<ProgressRow[]> {
   return fetchAll<ProgressRow>((from, to) =>
     supabase().from("list_line_progress").select("*").order("list_code").order("sort_order").range(from, to),
+  );
+}
+
+export async function fetchProcessLineProgress(): Promise<ProcessLineProgressRow[]> {
+  return fetchAll<ProcessLineProgressRow>((from, to) =>
+    supabase().from("production_line_process_progress").select("*")
+      .order("process_sort_order").order("line_name").range(from, to),
   );
 }
 
