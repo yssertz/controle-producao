@@ -170,6 +170,15 @@ test("cabeçalho Cód. Linha reconhece o código ERP e usa o mapeamento explíci
   assert.equal(r.rows[0].erp_line_code, 310);
 });
 
+test("exportação ERP com coluna de código sem cabeçalho antes de Fabricação", () => {
+  const text = "OP\tQtde\tCódigo\tDescrição\tCódigo MP\tQtde\tUnd\tDescrição Matéria prima\t\tFabricação\n" +
+    "7.604.001\t2\t30300101\tTRAVA SEGURANCA CARRINHO 21 TON.\t00693-2\t0,264\tMT\tFERRO CHAT 1/2 X 1 1/2 (6M) - MP\t310\tROD. GEKA";
+  const r = parsePaste(text);
+  assert.equal(r.headerFound, true);
+  assert.equal(r.rows[0].op_number, "7.604.001");
+  assert.equal(r.rows[0].erp_line_code, 310);
+});
+
 test("detectHeader: linha de dados não é cabeçalho", () => {
   assert.equal(detectHeader("7603839\t4\t30450066\tALÇA".split("\t")), null);
 });

@@ -260,6 +260,11 @@ export function detectHeader(cells: string[]): ColumnMap | null {
     if (units[0] < itemCode) itemUnit = units[0];
     else materialUnit = units[0];
   }
+  const explicitLineCode = n.findIndex((c) => ["linha", "cod linha", "codigo linha", "codigo da linha", "linha erp", "cod linha erp", "codigo linha erp"].includes(c));
+  const fabrication = n.indexOf("fabricacao");
+  // Algumas exportações do ERP deixam sem título a coluna do código (310),
+  // posicionada imediatamente antes de "Fabricação" (ROD. GEKA).
+  const inferredLineCode = fabrication > 0 && n[fabrication - 1] === "" ? fabrication - 1 : -1;
   return {
     op,
     quantity: qtde[0],
@@ -270,7 +275,7 @@ export function detectHeader(cells: string[]): ColumnMap | null {
     material_qty: qtde[1] ?? -1,
     material_unit: materialUnit,
     material: n.findIndex((c) => /^descricao (materia prima|mp)/.test(c)),
-    line_code: n.findIndex((c) => ["linha", "cod linha", "codigo linha", "codigo da linha", "linha erp", "cod linha erp", "codigo linha erp"].includes(c)),
+    line_code: explicitLineCode >= 0 ? explicitLineCode : inferredLineCode,
   };
 }
 
