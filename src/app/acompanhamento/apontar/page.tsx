@@ -174,8 +174,8 @@ function ApontarContent() {
                       </td>
                       <td className="num">{formatQty(Math.max(0, i.quantity - done))}</td>
                       <td>
-                        {source === "manual" && canOperate && (
-                          <button type="button" className="btn secondary small" onClick={() => setValues((v) => ({ ...v, [i.id]: String(i.quantity).replace(".", ",") }))}>Tudo</button>
+                        {source !== "nesting" && canOperate && (
+                          <button type="button" className="btn secondary small" onClick={() => setValues((v) => ({ ...v, [stepId]: String(i.quantity).replace(".", ",") }))}>Tudo</button>
                         )}
                       </td>
                     </tr>

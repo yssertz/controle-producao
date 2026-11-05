@@ -47,7 +47,15 @@ export async function fetchLineProcesses(lineId: string): Promise<ProcessOption[
     .eq("production_line_id", lineId).order("step_order");
   if (res.error) unwrap({ data: null, error: res.error });
   const rows = (res.data ?? []) as unknown as { step_order: number; production_sectors: { id: string; name: string } }[];
-  return rows.map((row) => ({ id: row.production_sectors.id, name: row.production_sectors.name, sort_order: row.step_order }));
+  const byProcess = new Map<string, ProcessOption>();
+  for (const row of rows) {
+    const name = row.production_sectors.name.trim();
+    const key = name.toLocaleLowerCase("pt-BR");
+    const candidate = { id: row.production_sectors.id, name, sort_order: row.step_order };
+    const current = byProcess.get(key);
+    if (!current || name === name.toLocaleLowerCase("pt-BR").replace(/(?:^|\s)\S/g, (letter) => letter.toLocaleUpperCase("pt-BR"))) byProcess.set(key, candidate);
+  }
+  return [...byProcess.values()].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "pt-BR"));
 }
 
 export async function fetchProcessItems(listId: string, lineId: string, sectorId: string, page: number): Promise<{ rows: (LineItem & { step_id: string })[]; total: number }> {
