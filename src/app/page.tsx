@@ -10,6 +10,8 @@ import { formatQty, listLabel } from "@/lib/format";
 import { fetchLaserMachines, fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { DashboardSummary, LaserMachine, ProductionLine } from "@/lib/types";
 import { EmptyState, Loading, Notice, PageHeader, ProgressBar } from "@/components/ui";
+import { fetchProcessProgress } from "@/lib/progress";
+import type { ProductionProcessProgress } from "@/lib/types";
 
 function Stat({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
@@ -30,6 +32,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [processProgress, setProcessProgress] = useState<ProductionProcessProgress[]>([]);
 
   useEffect(() => {
     Promise.all([fetchListOptions(true), fetchLines(false), fetchLaserMachines(false)])
@@ -39,6 +42,10 @@ export default function DashboardPage() {
         setMachines(m);
       })
       .catch((e) => setError(errorText(e)));
+  }, []);
+
+  useEffect(() => {
+    fetchProcessProgress().then(setProcessProgress).catch((e) => setError(errorText(e)));
   }, []);
 
   const load = useCallback(async () => {
@@ -59,6 +66,7 @@ export default function DashboardPage() {
 
   const set = (patch: Partial<DashboardFilters>) => setFilters((f) => ({ ...f, ...patch }));
   const filtered = hasActiveFilters(filters);
+  const visibleProcessProgress = processProgress.filter((row) => !filters.listId || row.list_id === filters.listId);
   const nothingAtAll =
     data !== null &&
     !filtered &&
@@ -180,6 +188,25 @@ export default function DashboardPage() {
             <Stat label="Peças programadas para laser" value={data.nestings.pieces_programmed} hint="Nesting concluído conta só o que foi cortado" />
             <Stat label="Peças efetivamente cortadas" value={data.nestings.pieces_cut} hint="Nestings em produção e concluídos" />
           </div>
+
+          <section className="card section-gap">
+            <h2 className="section-title">Avanço por processo</h2>
+            <p className="section-sub">Etapas individuais das OPs, incluindo linhas compostas como Laser e Dobra.</p>
+            {visibleProcessProgress.length === 0 ? <div className="empty">Sem etapas de processo para os filtros atuais.</div> : (
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Lista</th><th>Processo</th><th className="num">Itens</th><th className="num">Produzido</th><th className="num">Necessário</th><th>Avanço</th></tr></thead>
+                  <tbody>{visibleProcessProgress.map((row) => (
+                    <tr key={`${row.list_id}-${row.sector_id}`}>
+                      <td>{listLabel(row.list_code, row.list_name)}</td><td>{row.process_name}</td>
+                      <td className="num">{row.items}</td><td className="num">{formatQty(row.qty_done)}</td><td className="num">{formatQty(row.qty_total)}</td>
+                      <td style={{ minWidth: 160 }}><div className="loading-inline"><ProgressBar value={row.percent_done} tone="green" /><strong>{row.percent_done.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong></div></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </section>
 
           <div className="grid two">
             <section className="card">
