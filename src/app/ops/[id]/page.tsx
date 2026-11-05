@@ -179,7 +179,7 @@ export default function ItemDetailPage() {
                                 className="input cell-input"
                                 inputMode="decimal"
                                 value={baixaValues[step.step_id] ?? ""}
-                                disabled={!canOperate || progressSource === "nesting" || step.status === "Não se aplica"}
+                                disabled={!canOperate || step.status === "Não se aplica"}
                                 onChange={(e) => setBaixaValues((values) => ({ ...values, [step.step_id]: e.target.value }))}
                                 aria-label={`Quantidade produzida em ${step.process_name} da OP ${item.op_number}`}
                               />

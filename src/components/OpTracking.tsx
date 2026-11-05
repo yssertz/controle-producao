@@ -39,6 +39,7 @@ function QrOpScanner({ onScan }: { onScan: (opNumber: string) => Promise<boolean
     if (!cameraOpen) return;
     let active = true;
     let stream: MediaStream | null = null;
+    let videoElement: HTMLVideoElement | null = null;
     let frame = 0;
     let detecting = false;
 
@@ -54,6 +55,7 @@ function QrOpScanner({ onScan }: { onScan: (opNumber: string) => Promise<boolean
         const detector = new Detector({ formats: ["qr_code"] });
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
         const video = videoRef.current;
+        videoElement = video;
         if (!video || !active) return;
         video.srcObject = stream;
         await video.play();
@@ -89,7 +91,7 @@ function QrOpScanner({ onScan }: { onScan: (opNumber: string) => Promise<boolean
       active = false;
       cancelAnimationFrame(frame);
       stream?.getTracks().forEach((track) => track.stop());
-      if (videoRef.current) videoRef.current.srcObject = null;
+      if (videoElement) videoElement.srcObject = null;
     };
   }, [cameraOpen]);
 
