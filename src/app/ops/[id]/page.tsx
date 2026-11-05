@@ -105,6 +105,7 @@ export default function ItemDetailPage() {
             {item.notes && <p className="subtitle" style={{ marginTop: 14 }}>{item.notes}</p>}
           </section>
 
+          {item.line_allows_nesting && <>
           <section className="card section-gap">
             <h2 className="section-title">Saldo do corte a laser</h2>
             <p className="section-sub">Cada peça é contada uma só vez, mesmo que a OP esteja em vários nestings. Nestings cancelados não contam.</p>
@@ -154,6 +155,7 @@ export default function ItemDetailPage() {
               </div>
             )}
           </section>
+          </>}
 
           {deleteIds && (
             <DeleteItemsDialog ids={deleteIds} onClose={() => setDeleteIds(null)} onDone={() => router.push("/ops")} />

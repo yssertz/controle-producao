@@ -14,6 +14,8 @@ export interface ItemFilters {
   showArchived: boolean;
   /** só itens de linhas que aceitam nesting (laser) */
   onlyNestable?: boolean;
+  /** separa itens por processo para a tela de OPs */
+  nestingEligibility?: "laser" | "other";
   /** só itens que ainda têm quantidade a programar */
   onlyUnscheduled?: boolean;
   /** espessura em mm (texto numérico, ex.: "6.35"); "none" = itens sem espessura definida */
@@ -36,7 +38,18 @@ export async function searchItems(filters: ItemFilters, page: number): Promise<{
   else if (filters.thickness) q = q.eq("thickness_mm", Number(filters.thickness));
   q = filters.showArchived ? q.not("archived_at", "is", null) : q.is("archived_at", null);
   const term = sanitizeSearch(filters.search);
-  if (term) q = q.or(`op_number.ilike.%${term}%,item_code.ilike.%${term}%,description.ilike.%${term}%`);
+  const searchOr = term ? `or(op_number.ilike.%${term}%,item_code.ilike.%${term}%,description.ilike.%${term}%)` : "";
+  if (filters.nestingEligibility === "laser") {
+    q = term
+      ? q.or(`and(line_allows_nesting.eq.true,${searchOr})`)
+      : q.eq("line_allows_nesting", true);
+  } else if (filters.nestingEligibility === "other") {
+    q = term
+      ? q.or(`and(line_allows_nesting.eq.false,${searchOr}),and(line_allows_nesting.is.null,${searchOr})`)
+      : q.or("line_allows_nesting.eq.false,line_allows_nesting.is.null");
+  } else if (term) {
+    q = q.or(`op_number.ilike.%${term}%,item_code.ilike.%${term}%,description.ilike.%${term}%`);
+  }
   const from = page * PAGE_SIZE;
   const res = await q.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
   if (res.error) unwrap({ data: null, error: res.error });

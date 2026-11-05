@@ -29,6 +29,7 @@ function OpsContent() {
     search: "",
     showArchived: false,
     thickness: "",
+    nestingEligibility: "laser",
   });
   const [thicknesses, setThicknesses] = useState<ThicknessOption[]>([]);
   const [calcBusy, setCalcBusy] = useState(false);
@@ -134,6 +135,7 @@ function OpsContent() {
   }
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const isLaser = filters.nestingEligibility === "laser";
 
   async function toggleArchive(item: ItemBalance) {
     setBusy(true);
@@ -157,7 +159,9 @@ function OpsContent() {
       <PageHeader
         eyebrow="PCP / Planejamento"
         title="OPs e peças"
-        subtitle="Cada linha é um item de uma OP. Uma OP pode ter vários itens. O saldo de corte vem dos nestings."
+        subtitle={isLaser
+          ? "Peças das linhas habilitadas para nesting. Acompanhe a programação e o corte a laser."
+          : "Peças das demais linhas de produção. O fluxo delas não utiliza nesting a laser."}
         actions={
           <>
             <button className="btn secondary" onClick={() => void load()} disabled={loading}>
@@ -187,6 +191,29 @@ function OpsContent() {
           {msg.text}
         </Notice>
       )}
+
+      <div className="btn-row" role="tablist" aria-label="Grupo de peças" style={{ marginBottom: 14 }}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isLaser}
+          className={isLaser ? "pill blue" : "pill gray"}
+          style={{ border: 0, cursor: "pointer", fontSize: 13, padding: "7px 14px" }}
+          onClick={() => changeFilter({ nestingEligibility: "laser" })}
+        >
+          Laser
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isLaser}
+          className={!isLaser ? "pill blue" : "pill gray"}
+          style={{ border: 0, cursor: "pointer", fontSize: 13, padding: "7px 14px" }}
+          onClick={() => changeFilter({ nestingEligibility: "other" })}
+        >
+          Demais peças
+        </button>
+      </div>
 
       <div className="toolbar">
         <div className="field grow">
@@ -283,9 +310,11 @@ function OpsContent() {
                   <th>Lista</th>
                   <th>Linha</th>
                   <th className="num">Qtd.</th>
-                  <th className="num" title="Programado em nestings (um nesting concluído conta só o que foi cortado)">Programado</th>
-                  <th className="num">Cortado</th>
-                  <th className="num">Pendente de corte</th>
+                  {isLaser && <>
+                    <th className="num" title="Programado em nestings (um nesting concluído conta só o que foi cortado)">Programado</th>
+                    <th className="num">Cortado</th>
+                    <th className="num">Pendente de corte</th>
+                  </>}
                   <th>Status</th>
                   <th>Ações</th>
                 </tr>
@@ -319,12 +348,14 @@ function OpsContent() {
                       <td className="num">
                         {formatQty(r.qty_total)} <span className="muted">{r.unit}</span>
                       </td>
-                      <td className="num">
-                        {formatQty(r.qty_programmed)}
-                        {excess && <div><span className="pill amber" title="Programado acima do necessário (excedente autorizado)">excedente</span></div>}
-                      </td>
-                      <td className="num">{formatQty(r.qty_cut)}</td>
-                      <td className="num">{formatQty(r.qty_pending_cut)}</td>
+                      {isLaser && <>
+                        <td className="num">
+                          {formatQty(r.qty_programmed)}
+                          {excess && <div><span className="pill amber" title="Programado acima do necessário (excedente autorizado)">excedente</span></div>}
+                        </td>
+                        <td className="num">{formatQty(r.qty_cut)}</td>
+                        <td className="num">{formatQty(r.qty_pending_cut)}</td>
+                      </>}
                       <td>
                         <StatusPill status={r.status} />
                         {r.due_date && <div className="muted">prev. {formatDate(r.due_date)}</div>}
@@ -364,7 +395,10 @@ function OpsContent() {
         <ItemFormModal
           editing={modal.editing}
           lists={activeLists}
-          lines={lines.filter((l) => l.active || l.id === modal.editing?.production_line_id)}
+          lines={lines.filter((l) =>
+            (l.active || l.id === modal.editing?.production_line_id) &&
+            (modal.editing !== null || l.allows_nesting === isLaser),
+          )}
           defaultListId={filters.listId}
           onClose={() => setModal(null)}
           onSaved={(text) => {
