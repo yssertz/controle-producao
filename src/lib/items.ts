@@ -4,6 +4,7 @@ import { fetchAll } from "./fetch-all";
 import { PAGE_SIZE } from "./constants";
 import { itemKey } from "./excel-paste";
 import { parseThicknessMm } from "./thickness";
+import { compareOpNumbers } from "./op-sort";
 import type { ImportResult, ItemBalance, ItemNestingRow, ItemStatus, ResolvedLine } from "./types";
 
 export interface ItemFilters {
@@ -22,12 +23,14 @@ export interface ItemFilters {
   thickness?: string;
 }
 
+export type ItemSort = "created_desc" | "op_asc" | "op_desc" | "thickness_asc" | "thickness_desc" | "quantity_asc" | "quantity_desc" | "due_asc" | "line_asc";
+
 /** Remove caracteres que quebrariam o filtro .or() do PostgREST. */
 function sanitizeSearch(term: string): string {
   return term.replace(/[,()%*\\]/g, " ").trim();
 }
 
-export async function searchItems(filters: ItemFilters, page: number): Promise<{ rows: ItemBalance[]; total: number }> {
+function filteredItemsQuery(filters: ItemFilters) {
   let q = supabase().from("production_item_balance").select("*", { count: "exact" });
   if (filters.listId) q = q.eq("list_id", filters.listId);
   if (filters.lineId) q = q.eq("production_line_id", filters.lineId);
@@ -50,8 +53,34 @@ export async function searchItems(filters: ItemFilters, page: number): Promise<{
   } else if (term) {
     q = q.or(`op_number.ilike.%${term}%,item_code.ilike.%${term}%,description.ilike.%${term}%`);
   }
+  return q;
+}
+
+export async function searchItems(filters: ItemFilters, page: number, sort: ItemSort = "created_desc"): Promise<{ rows: ItemBalance[]; total: number }> {
+  if (sort === "op_asc" || sort === "op_desc") {
+    const all = await fetchAll<ItemBalance>((from, to) => filteredItemsQuery(filters).order("op_number", { ascending: sort === "op_asc" }).range(from, to));
+    all.sort((a, b) => {
+      return compareOpNumbers(a.op_number, b.op_number, sort === "op_asc" ? "asc" : "desc") || a.id.localeCompare(b.id);
+    });
+    const from = page * PAGE_SIZE;
+    return { rows: all.slice(from, from + PAGE_SIZE), total: all.length };
+  }
+
+  const order = {
+    created_desc: ["created_at", false],
+    thickness_asc: ["thickness_mm", true],
+    thickness_desc: ["thickness_mm", false],
+    quantity_asc: ["qty_total", true],
+    quantity_desc: ["qty_total", false],
+    due_asc: ["due_date", true],
+    line_asc: ["line_name", true],
+  } as const;
+  const [column, ascending] = order[sort];
   const from = page * PAGE_SIZE;
-  const res = await q.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
+  const res = await filteredItemsQuery(filters)
+    .order(column, { ascending, nullsFirst: false })
+    .order("op_number", { ascending: true })
+    .range(from, from + PAGE_SIZE - 1);
   if (res.error) unwrap({ data: null, error: res.error });
   return { rows: (res.data ?? []) as ItemBalance[], total: res.count ?? 0 };
 }

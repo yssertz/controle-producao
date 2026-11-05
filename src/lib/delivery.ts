@@ -30,6 +30,45 @@ export interface ProductionScrapReport {
   } | null;
 }
 
+export interface FabricatedOpGroup {
+  key: string;
+  list_id: string;
+  list_code: string | null;
+  list_name: string | null;
+  op_number: string;
+  items: ItemBalance[];
+}
+
+/** Lista somente OPs inteiras com todos os itens fabricados e ainda não entregues. */
+export async function fetchFabricatedOpGroups(activeListIds: Set<string>): Promise<FabricatedOpGroup[]> {
+  const rows = await fetchAll<ItemBalance>((from, to) =>
+    supabase()
+      .from("production_item_balance")
+      .select("*")
+      .is("archived_at", null)
+      .order("op_number")
+      .range(from, to),
+  );
+  const groups = new Map<string, FabricatedOpGroup>();
+  for (const item of rows) {
+    if (!item.list_id || !activeListIds.has(item.list_id)) continue;
+    const key = `${item.list_id}|${item.op_number}`;
+    const group = groups.get(key) ?? {
+      key,
+      list_id: item.list_id,
+      list_code: item.list_code,
+      list_name: item.list_name,
+      op_number: item.op_number,
+      items: [],
+    };
+    group.items.push(item);
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .filter((group) => group.items.every((item) => item.status === "Fabricada"))
+    .sort((a, b) => a.op_number.localeCompare(b.op_number, "pt-BR", { numeric: true }));
+}
+
 export async function fetchItemsByOpNumber(opNumber: string): Promise<ItemBalance[]> {
   const variants = opNumberVariants(opNumber);
   if (!variants.length) return [];

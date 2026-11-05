@@ -12,7 +12,7 @@ import { EmptyState, Loading, Notice, PageHeader, Pagination, StatusPill } from 
 import { ITEM_FILTER_STATUSES } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
-import { fetchThicknesses, recalcThickness, searchItems, setItemArchived, type ItemFilters, type ThicknessOption } from "@/lib/items";
+import { fetchThicknesses, recalcThickness, searchItems, setItemArchived, type ItemFilters, type ItemSort, type ThicknessOption } from "@/lib/items";
 import { formatMm } from "@/lib/thickness";
 import { fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { ItemBalance, ProductionLine } from "@/lib/types";
@@ -35,6 +35,7 @@ function OpsContent() {
   const [calcBusy, setCalcBusy] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(0);
+  const [sort, setSort] = useState<ItemSort>("created_desc");
   const [rows, setRows] = useState<ItemBalance[]>([]);
   const [total, setTotal] = useState(0);
   const [lists, setLists] = useState<ListOption[]>([]);
@@ -96,7 +97,7 @@ function OpsContent() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await searchItems(filters, page);
+      const res = await searchItems(filters, page, sort);
       if (res.rows.length === 0 && page > 0) {
         setPage(page - 1); // a página ficou vazia (ex.: após excluir): volta uma página
         return;
@@ -108,7 +109,7 @@ function OpsContent() {
     } finally {
       setLoading(false);
     }
-  }, [filters, page]);
+  }, [filters, page, sort]);
 
   useEffect(() => {
     void load();
@@ -122,6 +123,12 @@ function OpsContent() {
 
   function goPage(p: number) {
     setPage(p);
+    setSelected(new Set());
+  }
+
+  function changeSort(value: ItemSort) {
+    setSort(value);
+    setPage(0);
     setSelected(new Set());
   }
 
@@ -266,6 +273,20 @@ function OpsContent() {
                 </option>
               ))}
             {thicknesses.some((t) => t.thickness_mm === null) && <option value="none">Sem espessura definida</option>}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="f-sort">Ordenar por</label>
+          <select id="f-sort" className="select" value={sort} onChange={(e) => changeSort(e.target.value as ItemSort)}>
+            <option value="created_desc">Mais recentes</option>
+            <option value="op_asc">OP: menor para maior</option>
+            <option value="op_desc">OP: maior para menor</option>
+            <option value="thickness_asc">Espessura: menor para maior</option>
+            <option value="thickness_desc">Espessura: maior para menor</option>
+            <option value="quantity_asc">Quantidade: menor para maior</option>
+            <option value="quantity_desc">Quantidade: maior para menor</option>
+            <option value="due_asc">Prazo: mais próximo</option>
+            <option value="line_asc">Linha: A–Z</option>
           </select>
         </div>
         {canPlan && (

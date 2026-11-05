@@ -14,7 +14,7 @@ export default function BaixaOpsPage() {
       <PageHeader
         eyebrow="PCP / Produção"
         title="Baixa de OPs"
-        subtitle="Aponte a quantidade concluída em cada processo. Laser puro é apontado pelo nesting; entrega é registrada separadamente em Acompanhamento."
+        subtitle="Aponte a fabricação por processo, registre a entrega integral de OPs e acompanhe refugos. Laser puro é apontado pelo nesting."
         actions={<Link className="btn secondary" href="/ops"><ArrowLeft size={14} /> Voltar para OPs e peças</Link>}
       />
       <div className="btn-row" role="tablist" aria-label="Tipo de baixa" style={{ marginBottom: 16 }}>

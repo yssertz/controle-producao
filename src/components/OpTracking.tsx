@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, Search, Truck } from "lucide-react";
+import { Camera, CheckCircle2, ListChecks, Search, Truck } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { ConfirmModal } from "@/components/Modal";
 import { EmptyState, Notice, StatusPill } from "@/components/ui";
@@ -11,14 +11,17 @@ import { parseDecimalBR } from "@/lib/excel-paste";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
 import {
   fetchItemsByOpNumber,
+  fetchFabricatedOpGroups,
   fetchProductionDelivery,
   fetchProductionScrapReports,
   recordProductionDelivery,
   recordProductionScrap,
   type ProductionDelivery,
   type ProductionScrapReport,
+  type FabricatedOpGroup,
 } from "@/lib/delivery";
 import { fetchItemProcessSteps, type ItemProcessStep } from "@/lib/progress";
+import { fetchListOptions } from "@/lib/reference";
 import type { ItemBalance } from "@/lib/types";
 
 type BarcodeReader = { detect: (video: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
@@ -198,6 +201,12 @@ function listGroups(items: ItemBalance[]): { id: string; label: string; items: I
   return [...groups.values()];
 }
 
+function quantitySummary(items: ItemBalance[]): string {
+  const totals = new Map<string, number>();
+  for (const item of items) totals.set(item.unit, (totals.get(item.unit) ?? 0) + item.qty_total);
+  return [...totals].map(([unit, quantity]) => `${formatQty(quantity)} ${unit}`).join(" · ");
+}
+
 export function DeliveryTracking() {
   const { canOperate } = useAuth();
   const [matches, setMatches] = useState<ItemBalance[]>([]);
@@ -208,9 +217,66 @@ export function DeliveryTracking() {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showFabricated, setShowFabricated] = useState(false);
+  const [fabricatedGroups, setFabricatedGroups] = useState<FabricatedOpGroup[]>([]);
+  const [selectedBatch, setSelectedBatch] = useState<Set<string>>(new Set());
+  const [confirmBatch, setConfirmBatch] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
   const groups = useMemo(() => listGroups(matches), [matches]);
   const selectedGroup = groups.find((group) => group.id === selectedListId);
+  const batchGroups = fabricatedGroups.filter((group) => selectedBatch.has(group.key));
+
+  const refreshFabricated = useCallback(async () => {
+    const lists = await fetchListOptions(false);
+    const candidates = await fetchFabricatedOpGroups(new Set(lists.map((list) => list.id)));
+    setFabricatedGroups(candidates);
+  }, []);
+
+  async function toggleFabricatedList() {
+    if (showFabricated) {
+      setShowFabricated(false);
+      return;
+    }
+    setBatchBusy(true);
+    setMessage(null);
+    try {
+      await refreshFabricated();
+      setSelectedBatch(new Set());
+      setShowFabricated(true);
+    } catch (e) {
+      setMessage({ kind: "error", text: errorText(e) });
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
+  async function deliverBatch() {
+    if (!batchGroups.length) return;
+    setBatchBusy(true);
+    setMessage(null);
+    let delivered = 0;
+    const failures: string[] = [];
+    for (let index = 0; index < batchGroups.length; index += 5) {
+      const chunk = batchGroups.slice(index, index + 5);
+      const results = await Promise.allSettled(chunk.map((group) => recordProductionDelivery(group.list_id, group.op_number)));
+      results.forEach((result, resultIndex) => {
+        if (result.status === "fulfilled") delivered += 1;
+        else failures.push(`${chunk[resultIndex].op_number}: ${errorText(result.reason)}`);
+      });
+    }
+    setSelectedBatch(new Set());
+    setConfirmBatch(false);
+    try {
+      await refreshFabricated();
+    } catch (e) {
+      failures.push(`Falha ao atualizar a lista: ${errorText(e)}`);
+    }
+    setMessage(failures.length
+      ? { kind: "error", text: `${delivered} OP(s) baixada(s); ${failures.length} falha(s): ${failures.slice(0, 4).join(" · ")}${failures.length > 4 ? " · …" : ""}` }
+      : { kind: "success", text: `Baixa de entrega registrada para ${delivered} OP(s).` });
+    setBatchBusy(false);
+  }
 
   const loadGroup = useCallback(async (code: string, group: { id: string; items: ItemBalance[] }) => {
     if (!group.id) {
@@ -299,6 +365,50 @@ export function DeliveryTracking() {
     <>
       <QrOpScanner onScan={scan} />
       {message && <Notice kind={message.kind} onClose={() => setMessage(null)}>{message.text}</Notice>}
+      <section className="card section-gap">
+        <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2 className="section-title">OPs fabricadas aguardando entrega</h2>
+            <p className="section-sub">Mostra somente OPs em que todas as peças estão fabricadas e prontas para a baixa integral.</p>
+          </div>
+          <button className="btn secondary" type="button" onClick={() => void toggleFabricatedList()} disabled={batchBusy}>
+            <ListChecks size={14} /> {showFabricated ? "Ocultar OPs fabricadas" : batchBusy ? "Carregando..." : "Mostrar OPs fabricadas"}
+          </button>
+        </div>
+        {showFabricated && (fabricatedGroups.length === 0 ? (
+          <EmptyState title="Nenhuma OP fabricada aguardando entrega" />
+        ) : <>
+          <div className="toolbar" style={{ marginTop: 12 }}>
+            <label className="checkbox">
+              <input type="checkbox" checked={batchGroups.length === fabricatedGroups.length} disabled={!canOperate || batchBusy}
+                onChange={(e) => setSelectedBatch(e.target.checked ? new Set(fabricatedGroups.map((group) => group.key)) : new Set())} />
+              Selecionar todas ({fabricatedGroups.length})
+            </label>
+            {canOperate && <button className="btn primary" type="button" disabled={batchBusy || batchGroups.length === 0} onClick={() => setConfirmBatch(true)}>
+              <Truck size={14} /> Dar baixa nas selecionadas ({batchGroups.length})
+            </button>}
+          </div>
+          {!canOperate && <Notice kind="info">Seu perfil pode consultar, mas não registrar a entrega.</Notice>}
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th></th><th>OP</th><th>Lista</th><th className="num">Itens</th><th>Quantidade por unidade</th><th>Status</th></tr></thead>
+              <tbody>{fabricatedGroups.map((group) => <tr key={group.key}>
+                <td><input type="checkbox" checked={selectedBatch.has(group.key)} disabled={!canOperate || batchBusy}
+                  onChange={(e) => setSelectedBatch((previous) => {
+                    const next = new Set(previous);
+                    if (e.target.checked) next.add(group.key); else next.delete(group.key);
+                    return next;
+                  })} aria-label={`Selecionar OP ${group.op_number}`} style={{ width: 16, height: 16 }} /></td>
+                <td><strong>{group.op_number}</strong></td>
+                <td>{group.items[0].list_name ? listLabel(group.list_code, group.items[0].list_name) : "—"}</td>
+                <td className="num">{group.items.length}</td>
+                <td>{quantitySummary(group.items)}</td>
+                <td><StatusPill status="Fabricada" /></td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        </>)}
+      </section>
       {groups.length > 1 && (
         <div className="card section-gap">
           <div className="field" style={{ maxWidth: 420 }}>
@@ -367,6 +477,19 @@ export function DeliveryTracking() {
           onCancel={() => setConfirm(false)}
         />
       )}
+      {confirmBatch && <ConfirmModal
+        title="Dar baixa nas OPs selecionadas"
+        message={<>
+          <p>Serão registradas baixas integrais para <strong>{batchGroups.length} OP(s)</strong>:</p>
+          <ul>{batchGroups.slice(0, 8).map((group) => <li key={group.key}>{group.op_number} · {group.items[0].list_name ? listLabel(group.list_code, group.items[0].list_name) : "Sem lista"}</li>)}</ul>
+          {batchGroups.length > 8 && <p>e mais {batchGroups.length - 8} OP(s).</p>}
+          <Notice kind="warning">Cada OP é registrada separadamente. Se alguma falhar, as demais podem ser baixadas; o resultado indicará quais falharam.</Notice>
+        </>}
+        confirmLabel="Confirmar baixas"
+        busy={batchBusy}
+        onConfirm={() => void deliverBatch()}
+        onCancel={() => setConfirmBatch(false)}
+      />}
     </>
   );
 }
