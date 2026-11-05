@@ -3,7 +3,6 @@ import { supabase } from "./supabase";
 import { unwrap } from "./errors";
 import { fetchAll } from "./fetch-all";
 import { PAGE_SIZE } from "./constants";
-import type { ProductionProcessProgress } from "./types";
 
 export interface ProgressRow {
   list_id: string;
@@ -30,12 +29,6 @@ export async function fetchProgress(): Promise<ProgressRow[]> {
   );
 }
 
-export async function fetchProcessProgress(): Promise<ProductionProcessProgress[]> {
-  return fetchAll<ProductionProcessProgress>((from, to) =>
-    supabase().from("production_process_progress").select("*").order("list_code").order("sort_order").range(from, to),
-  );
-}
-
 export interface LineItem {
   id: string;
   op_number: string;
@@ -47,21 +40,30 @@ export interface LineItem {
   qty_done: number;
 }
 
-export async function fetchLineItems(listId: string, lineId: string, page: number): Promise<{ rows: LineItem[]; total: number }> {
-  const from = page * PAGE_SIZE;
-  const res = await supabase()
-    .from("production_orders")
-    .select("id,op_number,item_code,description,material,thickness_mm,quantity,qty_done", { count: "exact" })
-    .eq("list_id", listId)
-    .eq("production_line_id", lineId)
-    .is("archived_at", null)
-    .order("op_number")
-    .order("item_code")
-    .range(from, from + PAGE_SIZE - 1);
+export interface ProcessOption { id: string; name: string; sort_order: number; }
+export async function fetchLineProcesses(lineId: string): Promise<ProcessOption[]> {
+  const res = await supabase().from("production_line_processes")
+    .select("step_order,production_sectors!inner(id,name,sort_order)")
+    .eq("production_line_id", lineId).order("step_order");
   if (res.error) unwrap({ data: null, error: res.error });
-  return { rows: (res.data ?? []) as LineItem[], total: res.count ?? 0 };
+  const rows = (res.data ?? []) as unknown as { step_order: number; production_sectors: { id: string; name: string } }[];
+  return rows.map((row) => ({ id: row.production_sectors.id, name: row.production_sectors.name, sort_order: row.step_order }));
 }
 
-export async function setItemsDone(rows: { id: string; qty_done: number }[]): Promise<number> {
-  return Number(unwrap(await supabase().rpc("set_items_done", { p_rows: rows })) ?? 0);
+export async function fetchProcessItems(listId: string, lineId: string, sectorId: string, page: number): Promise<{ rows: (LineItem & { step_id: string })[]; total: number }> {
+  const from = page * PAGE_SIZE;
+  const res = await supabase().from("production_order_steps")
+    .select("id,quantity_completed,production_orders!inner(id,list_id,production_line_id,op_number,item_code,description,material,thickness_mm,quantity,archived_at),production_sectors!inner(id)", { count: "exact" })
+    .eq("production_orders.list_id", listId).eq("production_orders.production_line_id", lineId)
+    .eq("sector_id", sectorId).is("production_orders.archived_at", null)
+    .order("id").range(from, from + PAGE_SIZE - 1);
+  if (res.error) unwrap({ data: null, error: res.error });
+  type StepWithOrder = { id: string; quantity_completed: number; production_orders: LineItem & { list_id: string; production_line_id: string; archived_at: string | null } };
+  const data = (res.data ?? []) as unknown as StepWithOrder[];
+  const rows = data.map((row) => ({ ...row.production_orders, qty_done: Number(row.quantity_completed), step_id: row.id }));
+  return { rows, total: res.count ?? 0 };
+}
+
+export async function setProcessStepsDone(rows: { step_id: string; quantity_completed: number }[]): Promise<number> {
+  return Number(unwrap(await supabase().rpc("set_process_steps_done", { p_rows: rows })) ?? 0);
 }

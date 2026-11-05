@@ -290,6 +290,54 @@ html[data-theme="dark"] .link { color: #82b6fa; }
   .theme-toggle span { display: none; }
 }
 
+/* Direção visual Chão de Fábrica, criada com Themely */
+:root {
+  --bg: #f3f6f5;
+  --surface: #ffffff;
+  --ink: #182b2a;
+  --muted: #687b78;
+  --border: #dce5e2;
+  --border-soft: #edf2f0;
+  --navy-900: #123b3b;
+  --navy-800: #194b47;
+  --navy-700: #1f6258;
+  --blue-600: #258574;
+  --blue-500: #35a78f;
+  --blue-100: #e6f1ee;
+  --blue-50: #f1f8f6;
+  --table-head: #f7faf9;
+}
+
+.sidebar { background: linear-gradient(165deg, #164341, #102f31 82%); }
+.mark { background: #35a78f; color: #123b3b; }
+.nav-link.active { background: #258574; }
+.topbar { box-shadow: 0 3px 14px rgb(14 49 48 / 5%); }
+.card { border-radius: 16px; box-shadow: 0 2px 8px rgb(14 49 48 / 5%); }
+.stats .card { border-top-color: #35a78f; }
+.btn.primary { background: #123b3b; }
+.btn.primary:hover:not(:disabled) { background: #194b47; }
+.input:focus, .select:focus, .textarea:focus { outline-color: #e6f1ee; border-color: #35a78f; }
+
+html[data-theme="dark"] {
+  --bg: #101b1b;
+  --surface: #192727;
+  --ink: #e4eeeb;
+  --muted: #9aadaa;
+  --border: #2d403d;
+  --border-soft: #263936;
+  --navy-900: #102423;
+  --navy-800: #173532;
+  --navy-700: #205149;
+  --blue-600: #36a38d;
+  --blue-500: #4db79f;
+  --blue-100: #1e3d37;
+  --blue-50: #1a302d;
+  --table-head: #1e302e;
+}
+html[data-theme="dark"] .sidebar { background: linear-gradient(165deg, #122e2d, #0e2020); }
+html[data-theme="dark"] .nav-link.active { background: #205149; color: #d7f4ec; }
+html[data-theme="dark"] .stats .card { border-top-color: #347968; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }

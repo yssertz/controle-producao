@@ -193,19 +193,6 @@ export interface DashboardSummary {
   }[];
 }
 
-export interface ProductionProcessProgress {
-  list_id: string;
-  list_code: string | null;
-  list_name: string;
-  sector_id: string;
-  process_name: string;
-  sort_order: number;
-  items: number;
-  qty_total: number;
-  qty_done: number;
-  percent_done: number;
-}
-
 export interface ImportResult {
   inserted: number;
   duplicates: number;
