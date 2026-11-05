@@ -53,7 +53,10 @@ export async function fetchProductionDelivery(listId: string, opNumber: string):
 }
 
 export async function fetchProductionScrapReports(listId: string, opNumber: string): Promise<ProductionScrapReport[]> {
-  return fetchAll<ProductionScrapReport>((from, to) =>
+  const rows = await fetchAll<Omit<ProductionScrapReport, "production_sectors" | "production_orders"> & {
+    production_sectors: { name: string }[] | { name: string } | null;
+    production_orders: NonNullable<ProductionScrapReport["production_orders"]>[] | NonNullable<ProductionScrapReport["production_orders"]> | null;
+  }>((from, to) =>
     supabase()
       .from("production_scrap_reports")
       .select("id,production_order_id,sector_id,quantity,reason,reported_by_name,reported_at,production_sectors(name),production_orders!inner(op_number,list_id,item_code,description)")
@@ -61,7 +64,12 @@ export async function fetchProductionScrapReports(listId: string, opNumber: stri
       .eq("production_orders.op_number", opNumber.trim())
       .order("reported_at", { ascending: false })
       .range(from, to),
-  ) as Promise<ProductionScrapReport[]>;
+  );
+  return rows.map((row) => ({
+    ...row,
+    production_sectors: Array.isArray(row.production_sectors) ? row.production_sectors[0] ?? null : row.production_sectors,
+    production_orders: Array.isArray(row.production_orders) ? row.production_orders[0] ?? null : row.production_orders,
+  }));
 }
 
 export async function recordProductionDelivery(listId: string, opNumber: string): Promise<string> {

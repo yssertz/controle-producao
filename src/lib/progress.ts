@@ -73,7 +73,7 @@ export async function fetchItemProcessSteps(
     production_sectors: { name: string };
   }[];
   return {
-    progressSource: lineRes.data.progress_source === "nesting" ? "nesting" : "manual",
+    progressSource: lineRes.data?.progress_source === "nesting" ? "nesting" : "manual",
     steps: rows.map((row) => ({
       step_id: row.id,
       sector_id: row.sector_id,
