@@ -163,6 +163,13 @@ test("cabeçalho do Coletor: Und logo após Qtde NÃO vira código do item", () 
   assert.deepEqual(x.errors, []);
 });
 
+test("cabeçalho Cód. Linha reconhece o código ERP e usa o mapeamento explícito", () => {
+  const text = "OP\tQtde\tCódigo\tDescrição\tCód. Linha\tFabricação\n180.085\t2\t1128028\tCH. GUIA LATERAL INT.\t310\tROD. GEKA";
+  const r = parsePaste(text);
+  assert.equal(r.headerFound, true);
+  assert.equal(r.rows[0].erp_line_code, 310);
+});
+
 test("detectHeader: linha de dados não é cabeçalho", () => {
   assert.equal(detectHeader("7603839\t4\t30450066\tALÇA".split("\t")), null);
 });

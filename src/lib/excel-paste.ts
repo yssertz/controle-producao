@@ -239,7 +239,7 @@ export const DEFAULT_COLUMNS: ColumnMap = {
 };
 
 function norm(s: string): string {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[.:]/g, " ").replace(/\s+/g, " ");
 }
 
 /** Se a linha for um cabeçalho de planilha (OP, Qtde, Código...), devolve o mapa de colunas. */
@@ -270,7 +270,7 @@ export function detectHeader(cells: string[]): ColumnMap | null {
     material_qty: qtde[1] ?? -1,
     material_unit: materialUnit,
     material: n.findIndex((c) => /^descricao (materia prima|mp)/.test(c)),
-    line_code: n.findIndex((c) => c === "linha"),
+    line_code: n.findIndex((c) => ["linha", "cod linha", "codigo linha", "codigo da linha", "linha erp", "cod linha erp", "codigo linha erp"].includes(c)),
   };
 }
 
