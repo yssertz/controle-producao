@@ -68,7 +68,7 @@ export default function DashboardPage() {
     data.nestings.programmed + data.nestings.in_production + data.nestings.done_period + data.nestings.cancelled === 0;
 
   return (
-    <main className="content">
+    <main className="content dashboard">
       <PageHeader
         eyebrow="Painel de controle"
         title="Visão geral da produção"
