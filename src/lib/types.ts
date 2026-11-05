@@ -2,7 +2,7 @@ import type { ITEM_STATUSES, LIST_STATUSES, LIST_TYPES, NESTING_STATUSES } from 
 
 export type ListType = (typeof LIST_TYPES)[number];
 export type ListStatus = (typeof LIST_STATUSES)[number];
-export type ItemStatus = (typeof ITEM_STATUSES)[number];
+export type ItemStatus = (typeof ITEM_STATUSES)[number] | "Fabricada";
 export type NestingStatus = (typeof NESTING_STATUSES)[number];
 export type Role = "admin" | "pcp" | "operador" | "leitura";
 
@@ -169,6 +169,7 @@ export interface DashboardSummary {
     waiting: number;
     in_production: number;
     partial: number;
+    fabricated: number;
     done: number;
     blocked: number;
     ops_open: number;

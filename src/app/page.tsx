@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
-import { ITEM_STATUSES, NESTING_STATUSES } from "@/lib/constants";
+import { ITEM_FILTER_STATUSES, NESTING_STATUSES } from "@/lib/constants";
 import { EMPTY_DASHBOARD_FILTERS, fetchDashboard, hasActiveFilters, type DashboardFilters } from "@/lib/dashboard";
 import { errorText } from "@/lib/errors";
 import { formatQty, listLabel } from "@/lib/format";
@@ -113,7 +113,7 @@ export default function DashboardPage() {
             <label htmlFor="d-istatus">Status do item</label>
             <select id="d-istatus" className="select" value={filters.itemStatus} onChange={(e) => set({ itemStatus: e.target.value })}>
               <option value="">Todos</option>
-              {ITEM_STATUSES.map((s) => <option key={s}>{s}</option>)}
+              {ITEM_FILTER_STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="field">
@@ -159,15 +159,15 @@ export default function DashboardPage() {
           <h2 className="section-title" style={{ margin: "4px 0 10px" }}>Listas e itens</h2>
           <div className="grid stats">
             <Stat label="Listas cadastradas" value={data.lists_total} />
-            <Stat label="OPs em aberto" value={data.items.ops_open} hint={`${formatQty(data.items.open)} item(ns) em aberto`} />
+            <Stat label="OPs em aberto" value={data.items.ops_open} hint={`${formatQty(data.items.open)} itens não entregues · OP pode ter mais de um item`} />
             <Stat label="OPs aguardando produção" value={data.items.ops_waiting} hint={`${formatQty(data.items.waiting)} item(ns) aguardando`} />
             <Stat label="Itens cadastrados" value={data.items.total} />
           </div>
           <div className="grid stats">
-            <Stat label="Itens em produção" value={data.items.in_production} hint={data.items.partial > 0 ? `+ ${formatQty(data.items.partial)} parcial(is)` : undefined} />
-            <Stat label="Itens concluídos" value={data.items.done} />
+            <Stat label="Itens em produção ou parciais" value={data.items.in_production + data.items.partial} hint={`${formatQty(data.items.in_production)} em produção · ${formatQty(data.items.partial)} parciais`} />
+            <Stat label="Itens fabricados" value={data.items.fabricated} hint="Aguardam baixa de entrega" />
+            <Stat label="Itens entregues" value={data.items.done} />
             <Stat label="Itens bloqueados" value={data.items.blocked} />
-            <Stat label="Itens parciais" value={data.items.partial} />
           </div>
 
           <h2 className="section-title" style={{ margin: "8px 0 10px" }}>Corte a laser</h2>
@@ -178,7 +178,7 @@ export default function DashboardPage() {
             <Stat label="Nestings cancelados" value={data.nestings.cancelled} />
           </div>
           <div className="grid stats" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-            <Stat label="Peças programadas para laser" value={data.nestings.pieces_programmed} hint="Nesting concluído conta só o que foi cortado" />
+            <Stat label="Peças programadas ou cortadas" value={data.nestings.pieces_programmed} hint="Nestings ativos: quantidade programada · concluídos: quantidade cortada" />
             <Stat label="Peças efetivamente cortadas" value={data.nestings.pieces_cut} hint="Nestings em produção e concluídos" />
           </div>
 
@@ -190,7 +190,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="table-wrap" style={{ marginTop: 10 }}>
                   <table>
-                    <thead><tr><th>Linha</th><th className="num">Itens</th><th className="num">Concluídos</th><th style={{ width: 130 }}>Andamento</th></tr></thead>
+                    <thead><tr><th>Linha</th><th className="num">Itens</th><th className="num">Entregues</th><th style={{ width: 130 }}>Andamento</th></tr></thead>
                     <tbody>
                       {data.items_by_line.map((l) => (
                         <tr key={l.line}>

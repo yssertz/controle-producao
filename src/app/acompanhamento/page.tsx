@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { DeliveryTracking, OpProductionLookup, ScrapTracking } from "@/components/OpTracking";
-import { EmptyState, Loading, Notice, PageHeader, ProgressBar } from "@/components/ui";
+import { EmptyState, Loading, Notice, PageHeader } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
 import { fetchProcessLineProgress, fetchProgress, percent, type ProgressRow } from "@/lib/progress";
-import { aggregateLaserMachines, aggregateProcesses, totalProcessProgress } from "@/lib/production-dashboard";
+import { aggregateLaserMachines, aggregateProcesses } from "@/lib/production-dashboard";
 
 function cellClass(p: number | null): string {
   if (p === null) return "pill gray";
@@ -66,8 +66,6 @@ export default function AcompanhamentoPage() {
   const cell = useMemo(() => new Map(rows.map((r) => [`${r.list_id}|${r.line_id}`, r])), [rows]);
   const processRows = useMemo(() => aggregateProcesses(processRowsRaw), [processRowsRaw]);
   const laserRows = useMemo(() => aggregateLaserMachines(processRowsRaw), [processRowsRaw]);
-  const fabrication = useMemo(() => totalProcessProgress(processRows, "Fabricação"), [processRows]);
-  const folding = useMemo(() => totalProcessProgress(processRows, "Dobra"), [processRows]);
 
   return (
     <main className="content">
@@ -135,19 +133,6 @@ export default function AcompanhamentoPage() {
         <div className="card"><EmptyState title="Nenhum processo encontrado" /></div>
       ) : productionTab !== "listas" ? (
         <>
-          {productionTab === "processos" && <div className="grid two" style={{ marginBottom: 14 }}>
-            {([["Fabricação", fabrication], ["Dobra", folding]] as const).map(([label, total]) => (
-              <section className="card" key={label}>
-                <div className="eyebrow">Gargalo · {label}</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 6 }}>
-                  <strong style={{ fontSize: 26 }}>{fmtPct(percent(total.qty_done, total.qty_total))}</strong>
-                  <span className="muted">{formatQty(total.qty_done)} de {formatQty(total.qty_total)} peças-processo</span>
-                </div>
-                <ProgressBar value={percent(total.qty_done, total.qty_total) ?? 0} tone={(percent(total.qty_done, total.qty_total) ?? 0) >= 100 ? "green" : "blue"} />
-                <div className="muted" style={{ marginTop: 6 }}>{total.items} etapas de OP · {formatQty(Math.max(0, total.qty_total - total.qty_done))} pendentes</div>
-              </section>
-            ))}
-          </div>}
           {productionTab === "laser" && <section className="card" style={{ marginBottom: 14 }}>
             <h2 className="section-title">Fabricação por máquina laser</h2>
             <p className="section-sub">O corte conta como fabricado quando o nesting é concluído. A quantidade entregue aparece somente após a baixa integral da OP.</p>
@@ -185,7 +170,7 @@ export default function AcompanhamentoPage() {
               </tbody>
             </table>
           </div>}
-          <p className="muted" style={{ marginTop: 10 }}>Os percentuais agrupam todas as linhas do mesmo processo. Os totais contam etapas (peças-processo) para comparar filas; Dobra reúne as linhas de dobra e Fabricação reúne os demais processos sem Laser.</p>
+          <p className="muted" style={{ marginTop: 10 }}>Os percentuais agrupam todas as linhas do mesmo processo. Os totais contam etapas (peças-processo); Dobra reúne as linhas de dobra e os demais processos aparecem separados por setor.</p>
         </>
       ) : (
         <>

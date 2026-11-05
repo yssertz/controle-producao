@@ -9,7 +9,7 @@ import { DeleteItemsDialog } from "@/components/DeleteDialogs";
 import { ItemFormModal } from "@/components/ItemFormModal";
 import { ConfirmModal } from "@/components/Modal";
 import { EmptyState, Loading, Notice, PageHeader, Pagination, StatusPill } from "@/components/ui";
-import { ITEM_STATUSES } from "@/lib/constants";
+import { ITEM_FILTER_STATUSES } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
 import { fetchThicknesses, recalcThickness, searchItems, setItemArchived, type ItemFilters, type ThicknessOption } from "@/lib/items";
@@ -249,7 +249,7 @@ function OpsContent() {
           <label htmlFor="f-status">Status</label>
           <select id="f-status" className="select" value={filters.status} onChange={(e) => changeFilter({ status: e.target.value })}>
             <option value="">Todos</option>
-            {ITEM_STATUSES.map((s) => (
+            {ITEM_FILTER_STATUSES.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>

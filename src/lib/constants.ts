@@ -3,6 +3,8 @@
 export const LIST_TYPES = ["Rodoviário", "Ambiental", "Pós-vendas", "Avulsos", "Leniors"] as const;
 export const LIST_STATUSES = ["Planejada", "Em andamento", "Concluída", "Arquivada"] as const;
 export const ITEM_STATUSES = ["Aguardando", "Em produção", "Parcial", "Concluída", "Bloqueada"] as const;
+/** Status operacionais exibidos nos filtros; Fabricada é calculada automaticamente pelo processo. */
+export const ITEM_FILTER_STATUSES = ["Aguardando", "Em produção", "Parcial", "Fabricada", "Concluída", "Bloqueada"] as const;
 export const NESTING_STATUSES = ["Programado", "Em produção", "Concluído", "Cancelado"] as const;
 export const UNITS = ["un", "kg", "m", "m²", "mm", "L"] as const;
 
