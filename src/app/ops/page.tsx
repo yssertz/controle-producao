@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Archive, ArchiveRestore, ClipboardPaste, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ClipboardCheck, ClipboardPaste, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { DeleteItemsDialog } from "@/components/DeleteDialogs";
 import { ItemFormModal } from "@/components/ItemFormModal";
@@ -174,6 +174,9 @@ function OpsContent() {
             )}
             {canPlan && (
               <>
+                <Link className="btn secondary" href="/baixa-ops">
+                  <ClipboardCheck size={14} /> Baixa de OPs
+                </Link>
                 <Link className="btn secondary" href={filters.listId ? `/ops/colar?lista=${filters.listId}` : "/ops/colar"}>
                   <ClipboardPaste size={14} /> Colar do Excel
                 </Link>

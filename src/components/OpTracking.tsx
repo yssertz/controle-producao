@@ -25,7 +25,7 @@ type BarcodeReader = { detect: (video: HTMLVideoElement) => Promise<{ rawValue: 
 type BarcodeReaderConstructor = new (options: { formats: string[] }) => BarcodeReader;
 type WindowWithBarcodeReader = Window & { BarcodeDetector?: BarcodeReaderConstructor };
 
-function QrOpScanner({ onScan }: { onScan: (opNumber: string) => Promise<boolean> }) {
+export function QrOpScanner({ onScan }: { onScan: (opNumber: string) => Promise<boolean> }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onScanRef = useRef(onScan);
   const [opNumber, setOpNumber] = useState("");

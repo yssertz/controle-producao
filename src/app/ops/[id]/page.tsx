@@ -9,25 +9,18 @@ import { DeleteItemsDialog } from "@/components/DeleteDialogs";
 import { ItemFormModal } from "@/components/ItemFormModal";
 import { BackLink, EmptyState, Loading, Notice, ProgressBar, StatusPill } from "@/components/ui";
 import { errorText } from "@/lib/errors";
-import { parseDecimalBR } from "@/lib/excel-paste";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
 import { fetchItem, fetchItemNestings } from "@/lib/items";
-import { fetchItemProcessSteps, setProcessStepsDone, type ItemProcessStep } from "@/lib/progress";
 import { fetchLines, fetchListOptions, type ListOption } from "@/lib/reference";
 import type { ItemBalance, ItemNestingRow, ProductionLine } from "@/lib/types";
 
 export default function ItemDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { canPlan, canOperate } = useAuth();
+  const { canPlan } = useAuth();
   const router = useRouter();
   const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
   const [item, setItem] = useState<ItemBalance | null>(null);
   const [links, setLinks] = useState<ItemNestingRow[]>([]);
-  const [processSteps, setProcessSteps] = useState<ItemProcessStep[]>([]);
-  const [progressSource, setProgressSource] = useState<"nesting" | "manual">("manual");
-  const [baixaValues, setBaixaValues] = useState<Record<string, string>>({});
-  const [savingBaixa, setSavingBaixa] = useState(false);
-  const [baixaFeedback, setBaixaFeedback] = useState<{ kind: "success" | "info"; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [edit, setEdit] = useState<{ lists: ListOption[]; lines: ProductionLine[] } | null>(null);
@@ -39,16 +32,6 @@ export default function ItemDetailPage() {
       const [i, l] = await Promise.all([fetchItem(id), fetchItemNestings(id)]);
       setItem(i);
       setLinks(l);
-      if (i?.production_line_id) {
-        const processProgress = await fetchItemProcessSteps(i.id, i.production_line_id);
-        setProgressSource(processProgress.progressSource);
-        setProcessSteps(processProgress.steps);
-        setBaixaValues(Object.fromEntries(processProgress.steps.map((step) => [step.step_id, String(step.status === "Não se aplica" ? i.qty_total : step.quantity_completed).replace(".", ",")])));
-      } else {
-        setProgressSource("manual");
-        setProcessSteps([]);
-        setBaixaValues({});
-      }
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -66,36 +49,6 @@ export default function ItemDetailPage() {
       setEdit({ lists, lines });
     } catch (e) {
       setError(errorText(e));
-    }
-  }
-
-  async function saveBaixas() {
-    if (!item) return;
-    const changed: { step_id: string; quantity_completed: number }[] = [];
-    for (const step of processSteps) {
-      if (step.status === "Não se aplica") continue;
-      const quantity = parseDecimalBR(baixaValues[step.step_id] ?? "").value;
-      if (quantity === null || quantity < 0 || quantity > item.qty_total) {
-        setError(`Processo ${step.process_name}: informe uma quantidade entre 0 e ${formatQty(item.qty_total)}.`);
-        return;
-      }
-      if (quantity !== step.quantity_completed) changed.push({ step_id: step.step_id, quantity_completed: quantity });
-    }
-    if (changed.length === 0) {
-      setBaixaFeedback({ kind: "info", text: "Nenhuma quantidade foi alterada." });
-      return;
-    }
-    setSavingBaixa(true);
-    setError("");
-    setBaixaFeedback(null);
-    try {
-      const updated = await setProcessStepsDone(changed);
-      await load();
-      setBaixaFeedback({ kind: "success", text: `${updated} baixa(s) salva(s) para esta OP.` });
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setSavingBaixa(false);
     }
   }
 
@@ -153,66 +106,9 @@ export default function ItemDetailPage() {
           </section>
 
           <section className="card section-gap">
-            <h2 className="section-title">Baixa por processo</h2>
-            {baixaFeedback && <Notice kind={baixaFeedback.kind} onClose={() => setBaixaFeedback(null)}>{baixaFeedback.text}</Notice>}
-            {progressSource === "nesting" ? (
-              <Notice kind="info">A produção desta OP é registrada pelo nesting. Registre as quantidades cortadas na tela do nesting.</Notice>
-            ) : processSteps.length === 0 ? (
-              <EmptyState title="Nenhum processo configurado para esta linha" />
-            ) : (
-              <>
-                <p className="section-sub">Registre a quantidade concluída em cada etapa da OP. O saldo é independente por processo.</p>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr><th>Processo</th><th className="num">Necessário</th><th>Produzido</th><th className="num">Falta</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                      {processSteps.map((step) => {
-                        const done = step.status === "Não se aplica" ? item.qty_total : parseDecimalBR(baixaValues[step.step_id] ?? "").value ?? 0;
-                        return (
-                          <tr key={step.step_id}>
-                            <td>{step.process_name}</td>
-                            <td className="num">{formatQty(item.qty_total)} {item.unit}</td>
-                            <td style={{ minWidth: 140 }}>
-                              <input
-                                className="input cell-input"
-                                inputMode="decimal"
-                                value={baixaValues[step.step_id] ?? ""}
-                                disabled={!canOperate || step.status === "Não se aplica"}
-                                onChange={(e) => setBaixaValues((values) => ({ ...values, [step.step_id]: e.target.value }))}
-                                aria-label={`Quantidade produzida em ${step.process_name} da OP ${item.op_number}`}
-                              />
-                            </td>
-                            <td className="num">{formatQty(Math.max(0, item.qty_total - done))}</td>
-                            <td>
-                              {canOperate && progressSource === "manual" && step.status !== "Não se aplica" && (
-                                <button type="button" className="btn secondary small" onClick={() => setBaixaValues((values) => ({ ...values, [step.step_id]: String(item.qty_total).replace(".", ",") }))}>
-                                  Tudo
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {canOperate && progressSource === "manual" && (
-                  <div className="btn-row" style={{ marginTop: 14 }}>
-                    <button className="btn primary" onClick={() => void saveBaixas()} disabled={savingBaixa}>
-                      {savingBaixa ? "Salvando..." : "Salvar baixa da OP"}
-                    </button>
-                    <button
-                      className="btn secondary"
-                      onClick={() => setBaixaValues(Object.fromEntries(processSteps.map((step) => [step.step_id, String(item.qty_total).replace(".", ",")])))}
-                    >
-                      Marcar todos os processos como concluídos
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+            <h2 className="section-title">Baixa da OP</h2>
+            <p className="section-sub">As baixas por processo ficam na aba dedicada para facilitar o apontamento da equipe.</p>
+            <Link className="btn primary" href="/baixa-ops">Abrir baixa de OPs</Link>
           </section>
 
           {item.line_allows_nesting && <>

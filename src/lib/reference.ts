@@ -35,7 +35,8 @@ export async function fetchListOptions(includeArchived = false): Promise<ListOpt
 }
 
 export async function addLine(name: string, sortOrder: number): Promise<void> {
-  unwrap(await supabase().from("production_lines").insert({ name: name.trim(), sort_order: sortOrder }));
+  const normalized = name.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
+  unwrap(await supabase().from("production_lines").insert({ name: normalized, sort_order: sortOrder }));
 }
 
 export async function setLineActive(id: string, active: boolean): Promise<void> {

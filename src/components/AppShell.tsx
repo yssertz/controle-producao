@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, ClipboardList, Database, Factory, LayoutDashboard, Loader2, LogOut, Moon, Package, Sun, Truck, Zap } from "lucide-react";
+import { Activity, ClipboardCheck, ClipboardList, Database, Factory, LayoutDashboard, Loader2, LogOut, Moon, Package, Sun, Truck, Zap } from "lucide-react";
 import { configured } from "@/lib/supabase";
 import { useAuth } from "./AuthProvider";
 
@@ -11,6 +11,7 @@ const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/listas", label: "Listas de produção", icon: ClipboardList },
   { href: "/ops", label: "OPs e peças", icon: Package },
+  { href: "/baixa-ops", label: "Baixa de OPs", icon: ClipboardCheck },
   { href: "/nestings", label: "Nestings / Laser", icon: Zap },
   { href: "/leniors", label: "Leniors", icon: Truck },
   { href: "/acompanhamento", label: "Acompanhamento", icon: Activity },

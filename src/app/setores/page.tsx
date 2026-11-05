@@ -39,10 +39,15 @@ export default function SetoresPage() {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (newLine.trim() === "") return;
+    const normalizedName = newLine.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
+    if (lines.some((line) => line.name.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR") === normalizedName)) {
+      setMsg({ kind: "error", text: `A linha ${normalizedName} já está cadastrada.` });
+      return;
+    }
     setBusy(true);
     try {
       const nextOrder = (lines.reduce((m, l) => Math.max(m, l.sort_order), 0) || 0) + 10;
-      await addLine(newLine, nextOrder);
+      await addLine(normalizedName, nextOrder);
       setNewLine("");
       setMsg({ kind: "success", text: "Linha cadastrada." });
       await load();
@@ -73,7 +78,7 @@ export default function SetoresPage() {
 
   return (
     <main className="content">
-      <PageHeader eyebrow="Configuração" title="Setores e linhas" subtitle="Linhas de produção padronizadas, máquinas laser e catálogo de setores." />
+      <PageHeader eyebrow="Configuração" title="Setores e linhas" subtitle="Configure as linhas e etapas que aparecem nas OPs. Os nomes são padronizados automaticamente em maiúsculas." />
       {msg && <Notice kind={msg.kind} onClose={() => setMsg(null)}>{msg.text}</Notice>}
       {loading ? (
         <Loading />
@@ -131,7 +136,7 @@ export default function SetoresPage() {
             </section>
             <section className="card">
               <h2 className="section-title">Setores / processos</h2>
-              <p className="section-sub">Catálogo para os roteiros (Fase 6, ainda não implementada).</p>
+            <p className="section-sub">Etapas de fabricação usadas nos apontamentos das OPs.</p>
               {sectors.map((s) => (
                 <div key={s.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border-soft)", fontWeight: 600 }}>
                   {s.name} {s.is_external && <span className="pill blue">Externo</span>}

@@ -8,7 +8,7 @@ import { EmptyState, Loading, Notice, PageHeader, ProgressBar } from "@/componen
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
 import { fetchProcessLineProgress, fetchProgress, percent, type ProgressRow } from "@/lib/progress";
-import { aggregateLineProcesses, processKey, totalProcessProgress } from "@/lib/production-dashboard";
+import { aggregateLaserMachines, aggregateProcesses, totalProcessProgress } from "@/lib/production-dashboard";
 
 function cellClass(p: number | null): string {
   if (p === null) return "pill gray";
@@ -64,9 +64,8 @@ export default function AcompanhamentoPage() {
   }, [rows, onlyOpen]);
 
   const cell = useMemo(() => new Map(rows.map((r) => [`${r.list_id}|${r.line_id}`, r])), [rows]);
-  const processRows = useMemo(() => aggregateLineProcesses(processRowsRaw), [processRowsRaw]);
-  const laserRows = useMemo(() => processRows.filter((row) => processKey(row.line_name).includes("laser")), [processRows]);
-  const visibleProcessRows = productionTab === "laser" ? laserRows : processRows;
+  const processRows = useMemo(() => aggregateProcesses(processRowsRaw), [processRowsRaw]);
+  const laserRows = useMemo(() => aggregateLaserMachines(processRowsRaw), [processRowsRaw]);
   const fabrication = useMemo(() => totalProcessProgress(processRows, "Fabricação"), [processRows]);
   const folding = useMemo(() => totalProcessProgress(processRows, "Dobra"), [processRows]);
 
@@ -130,8 +129,10 @@ export default function AcompanhamentoPage() {
         <div className="card">
           <EmptyState title="Todas as listas estão 100%">Desmarque o filtro para ver as concluídas.</EmptyState>
         </div>
-      ) : productionTab !== "listas" && visibleProcessRows.length === 0 ? (
-        <div className="card"><EmptyState title={productionTab === "laser" ? "Nenhum processo laser encontrado" : "Nenhum processo encontrado"} /></div>
+      ) : productionTab === "laser" && laserRows.length === 0 ? (
+        <div className="card"><EmptyState title="Nenhuma máquina laser com OPs encontradas" /></div>
+      ) : productionTab === "processos" && processRows.length === 0 ? (
+        <div className="card"><EmptyState title="Nenhum processo encontrado" /></div>
       ) : productionTab !== "listas" ? (
         <>
           {productionTab === "processos" && <div className="grid two" style={{ marginBottom: 14 }}>
@@ -148,17 +149,17 @@ export default function AcompanhamentoPage() {
             ))}
           </div>}
           {productionTab === "laser" && <section className="card" style={{ marginBottom: 14 }}>
-            <h2 className="section-title">Acompanhamento exclusivo das linhas laser</h2>
-            <p className="section-sub">Corte conta como fabricado quando o nesting é concluído. Em linhas laser compostas, cada processo segue sua própria baixa. Entregue só aparece após a baixa integral da OP.</p>
+            <h2 className="section-title">Fabricação por máquina laser</h2>
+            <p className="section-sub">O corte conta como fabricado quando o nesting é concluído. A quantidade entregue aparece somente após a baixa integral da OP.</p>
           </section>}
-          <div className="table-wrap">
+          {productionTab === "laser" ? <div className="table-wrap">
             <table>
-              <thead><tr><th>Linha</th><th>Processo</th><th className="num">OPs</th><th className="num">Necessário</th><th className="num">Fabricado</th><th className="num">Entregue</th><th className="num">Pendente</th><th>Avanço</th></tr></thead>
+              <thead><tr><th>Máquina</th><th className="num">OPs</th><th className="num">Necessário</th><th className="num">Fabricado</th><th className="num">Entregue</th><th className="num">Pendente</th><th>Avanço</th></tr></thead>
               <tbody>
-                {visibleProcessRows.filter((r) => !onlyOpen || r.qty_done < r.qty_total).map((r) => {
+                {laserRows.filter((r) => !onlyOpen || r.qty_done < r.qty_total).map((r) => {
                   const p = percent(r.qty_done, r.qty_total);
-                  return <tr key={`${r.line_name}|${processKey(r.process_name)}`}>
-                    <td><strong>{r.line_name}</strong></td><td>{r.process_name}</td>
+                  return <tr key={r.machine_name}>
+                    <td><strong>{r.machine_name}</strong></td>
                     <td className="num">{r.items}</td><td className="num">{formatQty(r.qty_total)}</td>
                     <td className="num">{formatQty(r.qty_done)}</td><td className="num">{formatQty(r.qty_delivered)}</td>
                     <td className="num">{formatQty(Math.max(0, r.qty_total - r.qty_done))}</td>
@@ -167,8 +168,24 @@ export default function AcompanhamentoPage() {
                 })}
               </tbody>
             </table>
-          </div>
-          <p className="muted" style={{ marginTop: 10 }}>Os totais somam o volume de cada etapa (peças-processo), para comparar filas e identificar gargalos. Dobra agrega todas as linhas; Fabricação agrega os demais processos.</p>
+          </div> : <div className="table-wrap">
+            <table>
+              <thead><tr><th>Processo</th><th className="num">Etapas de OP</th><th className="num">Necessário</th><th className="num">Fabricado</th><th className="num">Entregue</th><th className="num">Pendente</th><th>Avanço</th></tr></thead>
+              <tbody>
+                {processRows.filter((r) => !onlyOpen || r.qty_done < r.qty_total).map((r) => {
+                  const p = percent(r.qty_done, r.qty_total);
+                  return <tr key={r.process_name}>
+                    <td><strong>{r.process_name}</strong></td>
+                    <td className="num">{r.items}</td><td className="num">{formatQty(r.qty_total)}</td>
+                    <td className="num">{formatQty(r.qty_done)}</td><td className="num">{formatQty(r.qty_delivered)}</td>
+                    <td className="num">{formatQty(Math.max(0, r.qty_total - r.qty_done))}</td>
+                    <td><span className={cellClass(p)}>{fmtPct(p)}</span></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>}
+          <p className="muted" style={{ marginTop: 10 }}>Os percentuais agrupam todas as linhas do mesmo processo. Os totais contam etapas (peças-processo) para comparar filas; Dobra reúne as linhas de dobra e Fabricação reúne os demais processos sem Laser.</p>
         </>
       ) : (
         <>
