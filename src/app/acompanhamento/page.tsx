@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
+import { DeliveryTracking, OpProductionLookup, ScrapTracking } from "@/components/OpTracking";
 import { EmptyState, Loading, Notice, PageHeader } from "@/components/ui";
 import { errorText } from "@/lib/errors";
 import { formatDate, formatQty, listLabel } from "@/lib/format";
@@ -20,6 +21,7 @@ function fmtPct(p: number | null): string {
 }
 
 export default function AcompanhamentoPage() {
+  const [tab, setTab] = useState<"producao" | "entrega" | "refugo">("producao");
   const [rows, setRows] = useState<ProgressRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,16 +64,36 @@ export default function AcompanhamentoPage() {
     <main className="content">
       <PageHeader
         eyebrow="PCP / Produção"
-        title="Acompanhamento por lista e linha"
-        subtitle="Percentual de peças produzidas em cada linha de cada lista. Clique em uma célula para apontar a produção."
+        title="Acompanhamento"
+        subtitle={tab === "producao" ? "Acompanhe as etapas da produção e consulte uma OP pelo QR code." : tab === "entrega" ? "Registre a entrega integral da OP depois da conferência do abastecedor." : "Registre refugos por peça e processo; a reposição é obrigatória."}
         actions={
-          <button className="btn secondary" onClick={() => void load()} disabled={loading}>
+          tab === "producao" ? <button className="btn secondary" onClick={() => void load()} disabled={loading}>
             <RefreshCw size={14} /> Atualizar
-          </button>
+          </button> : undefined
         }
       />
       {error && <Notice kind="error">{error}</Notice>}
 
+      <div className="btn-row" role="tablist" aria-label="Tipo de acompanhamento" style={{ marginBottom: 16 }}>
+        {([
+          ["producao", "Produção"],
+          ["entrega", "Entrega"],
+          ["refugo", "Refugo"],
+        ] as const).map(([value, label]) => (
+          <button key={value} type="button" role="tab" aria-selected={tab === value}
+            className={tab === value ? "pill blue" : "pill gray"}
+            style={{ border: 0, cursor: "pointer", fontSize: 13, padding: "7px 14px" }}
+            onClick={() => setTab(value)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "entrega" && <DeliveryTracking />}
+      {tab === "refugo" && <ScrapTracking />}
+
+      {tab === "producao" && <>
+      <OpProductionLookup />
       <div className="toolbar">
         <label className="checkbox" style={{ paddingBottom: 9 }}>
           <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />
@@ -142,6 +164,7 @@ export default function AcompanhamentoPage() {
           </p>
         </>
       )}
+      </>}
     </main>
   );
 }

@@ -41,6 +41,50 @@ export interface LineItem {
 }
 
 export interface ProcessOption { id: string; name: string; sort_order: number; }
+
+export interface ItemProcessStep {
+  step_id: string;
+  sector_id: string;
+  process_name: string;
+  step_order: number;
+  status: string;
+  quantity_completed: number;
+}
+
+export async function fetchItemProcessSteps(
+  itemId: string,
+  lineId: string,
+): Promise<{ progressSource: "nesting" | "manual"; steps: ItemProcessStep[] }> {
+  const [stepsRes, lineRes] = await Promise.all([
+    supabase().from("production_order_steps")
+      .select("id,sector_id,step_order,status,quantity_completed,production_sectors!inner(name)")
+      .eq("production_order_id", itemId)
+      .order("step_order"),
+    supabase().from("production_lines").select("progress_source").eq("id", lineId).single(),
+  ]);
+  if (stepsRes.error) unwrap({ data: null, error: stepsRes.error });
+  if (lineRes.error) unwrap({ data: null, error: lineRes.error });
+  const rows = (stepsRes.data ?? []) as unknown as {
+    id: string;
+    sector_id: string;
+    step_order: number;
+    status: string;
+    quantity_completed: number;
+    production_sectors: { name: string };
+  }[];
+  return {
+    progressSource: lineRes.data.progress_source === "nesting" ? "nesting" : "manual",
+    steps: rows.map((row) => ({
+      step_id: row.id,
+      sector_id: row.sector_id,
+      process_name: row.production_sectors.name,
+      step_order: row.step_order,
+      status: row.status,
+      quantity_completed: Number(row.quantity_completed),
+    })),
+  };
+}
+
 export async function fetchLineProcesses(lineId: string): Promise<ProcessOption[]> {
   const res = await supabase().from("production_line_processes")
     .select("step_order,production_sectors!inner(id,name,sort_order)")
