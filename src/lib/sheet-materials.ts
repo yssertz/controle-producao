@@ -5,6 +5,7 @@ export const SHEET_MATERIAL_TYPES = [
   { value: "INOX", label: "Inox" },
   { value: "HARDOX", label: "Hardox" },
   { value: "STRENX", label: "Strenx" },
+  { value: "ANTIDERRAPANTE", label: "Antiderrapante" },
 ] as const;
 export type SheetMaterialType = (typeof SHEET_MATERIAL_TYPES)[number]["value"];
 export function classifyProductionMaterial(material: string | null | undefined): SheetMaterialType | null {
@@ -15,6 +16,7 @@ export function classifyProductionMaterial(material: string | null | undefined):
   if (/(^|[^0-9])22630([^0-9]|$)/.test(value)) return "A36_SAE1010_20_NORMAL";
   if (/\bLNE\b|LNE[- ]?\d/.test(value)) return "A36_SAE1010_20_LNE";
   if (/ASTM[\s-]*A[\s-]*36|SAE\s*1010\s*\/\s*20/.test(value)) return "A36_SAE1010_20_NORMAL";
+  if (/ANTIDERRAPANTE|PE DE GALINHA/.test(value)) return "ANTIDERRAPANTE";
   if (/GALVANIZ/.test(value)) return "GALVANIZADA";
   if (/INOX|AISI\s*30[24]/.test(value)) return "INOX";
   if (/HARDOX/.test(value)) return "HARDOX";
