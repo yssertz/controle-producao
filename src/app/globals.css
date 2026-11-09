@@ -460,7 +460,7 @@ h1, .dashboard > .heading h1 {
 .dashboard .stat-value { font-size: 36px; }
 tbody tr:hover { background: var(--row-hover); }
 .pill { border-radius: 6px; padding: 4px 8px; font-weight: 600; }
-.pill.green::before, .pill.amber::before, .pill.red::before, .pill.blue::before {
+span.pill.green::before, span.pill.amber::before, span.pill.red::before, span.pill.blue::before {
   display: inline-block;
   width: 7px;
   height: 7px;
@@ -469,18 +469,18 @@ tbody tr:hover { background: var(--row-hover); }
   vertical-align: 1px;
   content: "";
 }
-.pill.green::before { background: var(--success); }
-.pill.amber::before { background: var(--warning); }
-.pill.red::before { background: var(--error); }
-.pill.blue::before { background: var(--info); }
+span.pill.green::before { background: var(--success); }
+span.pill.amber::before { background: var(--warning); }
+span.pill.red::before { background: var(--error); }
+span.pill.blue::before { background: var(--info); }
 button[role="tab"][aria-selected="true"] {
-  border: 1px solid var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
   background: var(--accent-soft);
   color: var(--ink);
   font-weight: 600;
 }
 button[role="tab"][aria-selected="false"] {
-  border: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
   background: var(--surface);
   color: var(--muted);
 }
