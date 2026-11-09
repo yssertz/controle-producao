@@ -43,3 +43,22 @@ end;
 $$;
 
 grant execute on function public.cgp_classify_sheet_material(text) to authenticated;
+
+-- Atualiza a validação da função de gravação sem reescrever sua lógica de negócio.
+do $$
+declare
+  v_definition text;
+  v_old text := '''A36_SAE1010_20_NORMAL'',''A36_SAE1010_20_LNE'',''GALVANIZADA'',''INOX'',''HARDOX'',''STRENX''';
+  v_new text := '''A36_SAE1010_20_NORMAL'',''A36_SAE1010_20_LNE'',''GALVANIZADA'',''INOX'',''HARDOX'',''STRENX'',''ANTIDERRAPANTE''';
+begin
+  select pg_get_functiondef(
+    'public.save_nesting(uuid,text,uuid,text,text,text,numeric,date,text,jsonb)'::regprocedure
+  ) into v_definition;
+
+  if position(v_old in v_definition) = 0 then
+    raise exception 'Não foi possível localizar a lista de materiais permitidos em save_nesting.';
+  end if;
+
+  execute replace(v_definition, v_old, v_new);
+end;
+$$;
