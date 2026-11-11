@@ -498,7 +498,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
               Total programado neste nesting: <strong>{formatQty(totalQty)}</strong> peça(s)
             </p>
           </>
-        )}
+        ) : null}
       </section>
 
       <section className="card">
