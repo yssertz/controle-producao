@@ -268,7 +268,8 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   }
 
   const selected = Object.values(sel);
-  const totalQty = selected.reduce((sum, s) => sum + (parseDecimalBR(s.qty).value ?? 0), 0);
+  const totalQty = selected.reduce((sum, s) => sum + (parseDecimalBR(s.qty).value ?? 0), 0)
+    + manualItems.reduce((sum, item) => sum + (parseDecimalBR(item.quantity).value ?? 0), 0);
   const nestableLines = lines.filter((l) => l.allows_nesting);
 
   async function submit(e: React.FormEvent) {
@@ -448,7 +449,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       </section>
 
       <section className="card">
-        <h2 className="section-title">Peças neste nesting ({selected.length + manualItems.length})</h2>
+        <h2 className="section-title">Peças neste nesting ({selected.length + manualItems.length}) · {formatQty(totalQty)} programada(s)</h2>
         <p className="section-sub">Pode misturar peças de várias listas. Informe quantas peças de cada OP serão cortadas aqui.</p>
         {selected.length === 0 && manualItems.length === 0 ? (
           <div className="empty">Nenhuma peça selecionada. Use o cadastro avulso ou a busca abaixo para adicionar peças.</div>
