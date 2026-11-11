@@ -30,7 +30,7 @@ export async function fetchNesting(id: string): Promise<NestingSummary | null> {
 export async function fetchNestingItems(nestingId: string): Promise<NestingItemRow[]> {
   const res = await supabase()
     .from("nesting_order_items")
-    .select("id,production_order_id,quantity_programmed,quantity_cut,allow_excess,notes,production_orders(id,op_number,item_code,description,quantity,unit,production_lists(code,name))")
+    .select("id,production_order_id,op_number,equipment_name,description,material,thickness_mm,quantity_programmed,quantity_cut,allow_excess,notes,production_orders(id,op_number,item_code,description,quantity,unit,production_lists(code,name))")
     .eq("nesting_id", nestingId)
     .order("created_at");
   return (unwrap(res) ?? []) as unknown as NestingItemRow[];
@@ -49,12 +49,22 @@ export async function fetchProfileNames(): Promise<Map<string, string>> {
   return new Map(rows.map((r) => [r.id, r.full_name?.trim() || r.email || "Usuário"]));
 }
 
-export interface NestingItemInput {
+export type NestingItemInput = {
   production_order_id: string;
   quantity_programmed: number;
   notes: string | null;
   allow_excess: boolean;
-}
+} | {
+  production_order_id: null;
+  op_number: string;
+  equipment_name: string;
+  description: string;
+  material: string;
+  thickness_mm: number;
+  quantity_programmed: number;
+  notes: null;
+  allow_excess: false;
+};
 
 export interface NestingInput {
   id: string | null;
@@ -90,7 +100,7 @@ export async function startNesting(id: string): Promise<void> {
 }
 
 export interface CutInput {
-  production_order_id: string;
+  nesting_item_id: string;
   quantity_cut: number;
 }
 
