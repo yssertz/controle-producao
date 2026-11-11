@@ -60,7 +60,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const [rows, setRows] = useState<ItemBalance[]>([]);
   const [total, setTotal] = useState(0);
   const [pickLoading, setPickLoading] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -130,7 +129,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     fetchThicknesses({ onlyNestable: true, onlyPending: true })
       .then(setThicknessOptions)
       .catch((e) => setError(errorText(e)));
-  }, [ready, refreshKey]);
+  }, [ready]);
 
   // busca com pequena espera
   useEffect(() => {
@@ -162,7 +161,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
     return () => {
       cancelled = true;
     };
-  }, [ready, listFilter, lineFilter, search, onlyUnscheduled, thick, page, refreshKey]);
+  }, [ready, listFilter, lineFilter, search, onlyUnscheduled, thick, page]);
 
   const available = useCallback((i: ItemBalance) => Math.max(0, i.qty_total - (i.qty_programmed - (own[i.id] ?? 0))), [own]);
 
