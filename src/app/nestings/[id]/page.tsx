@@ -241,7 +241,7 @@ export default function NestingDetailPage() {
                 <Link className="btn secondary" href={`/nestings/${nesting.id}/editar`}><Pencil size={14} /> Editar</Link>
               )}
               {nesting.status === "Programado" && canOperate && (
-                <button className="btn primary" onClick={() => setAction("start")} disabled={items.length === 0} title={items.length === 0 ? "Vincule OPs antes de iniciar" : undefined}>
+                <button className="btn primary" onClick={() => setAction("start")} disabled={items.length === 0} title={items.length === 0 ? "Adicione peças antes de iniciar" : undefined}>
                   <Play size={14} /> Iniciar corte
                 </button>
               )}
@@ -282,7 +282,7 @@ export default function NestingDetailPage() {
             <h2 className="section-title">Peças neste nesting ({items.length})</h2>
             <p className="section-sub">Programado: {formatQty(totalProg)} · Cortado: {formatQty(totalCut)}</p>
             {items.length === 0 ? (
-              <div className="empty">Nenhuma OP vinculada. {nesting.status === "Programado" && canPlan ? "Use “Editar” para vincular OPs da lista." : ""}</div>
+              <div className="empty">Nenhuma peça vinculada. {nesting.status === "Programado" && canPlan ? "Use “Editar” para vincular OPs da lista." : ""}</div>
             ) : (
               <div className="table-wrap">
                 <table>
@@ -330,7 +330,7 @@ export default function NestingDetailPage() {
             <DeleteNestingDialog nestingId={nesting.id} onClose={() => setDeleting(false)} onDone={() => router.push("/nestings")} />
           )}
           {action === "start" && (
-            <ConfirmModal title="Iniciar corte" message={<>O nesting <strong>{nesting.code}</strong> passará para <strong>Em produção</strong>. Depois disso as OPs e quantidades programadas não poderão mais ser alteradas.</>} confirmLabel="Iniciar corte" busy={busy} onConfirm={() => void run(() => startNesting(nesting.id), "Corte iniciado.")} onCancel={() => setAction(null)} />
+            <ConfirmModal title="Iniciar corte" message={<>O nesting <strong>{nesting.code}</strong> passará para <strong>Em produção</strong>. Depois disso as peças e quantidades programadas não poderão mais ser alteradas.</>} confirmLabel="Iniciar corte" busy={busy} onConfirm={() => void run(() => startNesting(nesting.id), "Corte iniciado.")} onCancel={() => setAction(null)} />
           )}
           {action === "cancel" && (
             <ReasonModal danger title="Cancelar nesting" description={<>O nesting <strong>{nesting.code}</strong> será cancelado. Nada é apagado e as quantidades dele não contam como produção. {nesting.status === "Em produção" && "Só é possível cancelar se nenhuma peça cortada tiver sido registrada."}</>} label="Motivo do cancelamento" confirmLabel="Cancelar nesting" busy={busy} onConfirm={(r) => void run(() => cancelNesting(nesting.id, r), "Nesting cancelado.")} onCancel={() => setAction(null)} />
