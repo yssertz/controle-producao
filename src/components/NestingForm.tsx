@@ -450,9 +450,9 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       <section className="card">
         <h2 className="section-title">Peças neste nesting ({selected.length + manualItems.length})</h2>
         <p className="section-sub">Pode misturar peças de várias listas. Informe quantas peças de cada OP serão cortadas aqui.</p>
-        {selected.length === 0 ? (
-          <div className="empty">Nenhuma peça selecionada. Use a busca abaixo para adicionar (ou salve sem peças e vincule depois).</div>
-        ) : (
+        {selected.length === 0 && manualItems.length === 0 ? (
+          <div className="empty">Nenhuma peça selecionada. Use o cadastro avulso ou a busca abaixo para adicionar peças.</div>
+        ) : selected.length > 0 ? (
           <>
             <div className="table-wrap">
               <table>
