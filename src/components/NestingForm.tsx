@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ItemFormModal } from "./ItemFormModal";
 import { Loading, Notice, Pagination } from "./ui";
 import { NESTING_CODE_REGEX } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
@@ -62,7 +61,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const [total, setTotal] = useState(0);
   const [pickLoading, setPickLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [avulsoModal, setAvulsoModal] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -272,7 +270,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const selected = Object.values(sel);
   const totalQty = selected.reduce((sum, s) => sum + (parseDecimalBR(s.qty).value ?? 0), 0);
   const nestableLines = lines.filter((l) => l.allows_nesting);
-  const avulsoLists = lists.filter((l) => l.list_type === "Avulsos");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -557,11 +554,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
             <input type="checkbox" checked={onlyUnscheduled} onChange={(e) => { setOnlyUnscheduled(e.target.checked); setPage(0); }} />
             Só com saldo a programar
           </label>
-          <button type="button" className="btn secondary" onClick={() => setAvulsoModal(true)} disabled={avulsoLists.length === 0} title={avulsoLists.length === 0 ? "Crie antes uma lista do tipo Avulsos" : undefined}>
-            Cadastrar peça avulsa
-          </button>
         </div>
-        {avulsoLists.length === 0 && <p className="muted" style={{ marginBottom: 10 }}>Para peças sem OP ou fora de lista, crie uma lista do tipo <strong>Avulsos</strong> e cadastre a peça nela.</p>}
         {pickLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
@@ -614,20 +607,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       </div>
 
     </form>
-
-      {avulsoModal && (
-        <ItemFormModal
-          editing={null}
-          lists={avulsoLists}
-          lines={nestableLines.filter((l) => l.active)}
-          defaultListId={avulsoLists[0]?.id}
-          onClose={() => setAvulsoModal(false)}
-          onSaved={() => {
-            setAvulsoModal(false);
-            setRefreshKey((k) => k + 1);
-          }}
-        />
-      )}
+}
     </>
   );
 }
