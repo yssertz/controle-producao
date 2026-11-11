@@ -134,7 +134,7 @@ function NestingsContent() {
       ) : rows.length === 0 ? (
         <div className="card">
           <EmptyState title="Nenhum nesting encontrado">
-            {canPlan ? "Crie o primeiro nesting escolhendo uma lista que já tenha OPs cadastradas." : "Ajuste os filtros ou aguarde o PCP programar os cortes."}
+            {canPlan ? "Crie um nesting e adicione OPs cadastradas ou peças avulsas." : "Ajuste os filtros ou aguarde o PCP programar os cortes."}
           </EmptyState>
         </div>
       ) : (
@@ -148,7 +148,7 @@ function NestingsContent() {
                   <th>Máquina</th>
                   <th>Material</th>
                   <th>Data programada</th>
-                  <th className="num">OPs</th>
+                  <th className="num">Peças</th>
                   <th className="num">Programado</th>
                   <th className="num">Cortado</th>
                   <th>Status</th>
@@ -159,7 +159,7 @@ function NestingsContent() {
                 {rows.map((n) => (
                   <tr key={n.id}>
                     <td><Link className="link" href={`/nestings/${n.id}`}>{n.code}</Link></td>
-                    <td style={{ maxWidth: 260 }}>{n.list_names ?? <span className="muted">sem OPs</span>}</td>
+                    <td style={{ maxWidth: 260 }}>{n.list_names ?? (n.items_count > 0 ? <span className="muted">Peças avulsas</span> : <span className="muted">sem peças</span>)}</td>
                     <td>{n.machine_name ?? <span className="pill red">Sem máquina</span>}</td>
                     <td>{n.material ?? "—"}{n.thickness_mm ? ` · ${formatQty(n.thickness_mm)} mm` : ""}</td>
                     <td>{formatDate(n.programmed_at)}</td>

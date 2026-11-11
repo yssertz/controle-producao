@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ItemFormModal } from "./ItemFormModal";
 import { Loading, Notice, Pagination } from "./ui";
 import { NESTING_CODE_REGEX } from "@/lib/constants";
 import { errorText } from "@/lib/errors";
@@ -48,6 +47,8 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
 
   const [own, setOwn] = useState<Record<string, number>>({}); // já programado NESTE nesting (edição)
   const [sel, setSel] = useState<Record<string, Selected>>({});
+  const [manualItems, setManualItems] = useState<Array<{ op_number: string; equipment_name: string; description: string; material: string; thickness_mm: string; quantity: string }>>([]);
+  const [manualDraft, setManualDraft] = useState({ op_number: "", equipment_name: "", description: "", material: "", thickness_mm: "", quantity: "1" });
 
   // busca de peças
   const [listFilter, setListFilter] = useState(initialListId ?? "");
@@ -60,7 +61,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const [total, setTotal] = useState(0);
   const [pickLoading, setPickLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [avulsoModal, setAvulsoModal] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -94,12 +94,15 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
           setThick(n.thickness_mm !== null ? String(Number(n.thickness_mm)) : "");
           setDate(n.programmed_at ?? "");
           setNotes(n.notes ?? "");
-          const snapshots = await fetchItemsByIds(its.map((i) => i.production_order_id));
+          const manual = its.filter((i) => !i.production_order_id);
+          setManualItems(manual.map((i) => ({ op_number: i.op_number ?? "", equipment_name: i.equipment_name ?? "", description: i.description ?? "", material: i.material ?? "", thickness_mm: String(i.thickness_mm ?? ""), quantity: toText(i.quantity_programmed) })));
+          const snapshots = await fetchItemsByIds(its.filter((i) => i.production_order_id).map((i) => i.production_order_id!));
           if (cancelled) return;
           const byId = new Map(snapshots.map((s) => [s.id, s]));
           const ownMap: Record<string, number> = {};
           const selMap: Record<string, Selected> = {};
           its.forEach((i) => {
+            if (!i.production_order_id) return;
             const snap = byId.get(i.production_order_id);
             if (!snap) return;
             ownMap[i.production_order_id] = i.quantity_programmed;
@@ -267,7 +270,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
   const selected = Object.values(sel);
   const totalQty = selected.reduce((sum, s) => sum + (parseDecimalBR(s.qty).value ?? 0), 0);
   const nestableLines = lines.filter((l) => l.allows_nesting);
-  const avulsoLists = lists.filter((l) => l.list_type === "Avulsos");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -290,6 +292,17 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
         return setError(`A OP ${s.item.op_number} passaria do necessário (disponível: ${formatQty(av)}). Reduza a quantidade ou marque “Permitir excedente”.`);
       }
       payload.push({ production_order_id: s.item.id, quantity_programmed: q, notes: null, allow_excess: s.allowExcess && q > av });
+    }
+    for (const item of manualItems) {
+      const qty = parseDecimalBR(item.quantity).value;
+      const thickness = parseDecimalBR(item.thickness_mm).value;
+      if (!item.op_number.trim() || !item.equipment_name.trim() || !item.description.trim() || !item.material.trim() || thickness === null || thickness <= 0 || qty === null || qty <= 0) {
+        return setError("Preencha OP, equipamento, descrição, material, espessura e quantidade válida da peça avulsa.");
+      }
+      if (!isMaterialCompatible(sheetMaterialType, item.material)) return setError(`A peça avulsa ${item.op_number} possui material incompatível com a chapa selecionada.`);
+      if (t !== null && Math.abs(t - thickness) > 0.0001) return setError(`A peça avulsa ${item.op_number} possui espessura diferente da chapa do nesting.`);
+      t = thickness;
+      payload.push({ production_order_id: null, op_number: item.op_number.trim(), equipment_name: item.equipment_name.trim(), description: item.description.trim(), material: item.material.trim(), thickness_mm: thickness, quantity_programmed: qty, notes: null, allow_excess: false });
     }
     setBusy(true);
     try {
@@ -435,7 +448,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       </section>
 
       <section className="card">
-        <h2 className="section-title">Peças neste nesting ({selected.length})</h2>
+        <h2 className="section-title">Peças neste nesting ({selected.length + manualItems.length})</h2>
         <p className="section-sub">Pode misturar peças de várias listas. Informe quantas peças de cada OP serão cortadas aqui.</p>
         {selected.length === 0 ? (
           <div className="empty">Nenhuma peça selecionada. Use a busca abaixo para adicionar (ou salve sem peças e vincule depois).</div>
@@ -489,6 +502,31 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       </section>
 
       <section className="card">
+        <h2 className="section-title">Peças avulsas</h2>
+        <p className="section-sub">Adicione uma OP que ainda não está cadastrada em uma lista de produção.</p>
+        <div className="form three">
+          <div className="field"><label>OP *</label><input className="input" value={manualDraft.op_number} onChange={(e) => setManualDraft((v) => ({ ...v, op_number: e.target.value }))} placeholder="Ex.: 7.604.497" /></div>
+          <div className="field"><label>Equipamento *</label><input className="input" value={manualDraft.equipment_name} onChange={(e) => setManualDraft((v) => ({ ...v, equipment_name: e.target.value }))} /></div>
+          <div className="field"><label>Descrição da peça *</label><input className="input" value={manualDraft.description} onChange={(e) => setManualDraft((v) => ({ ...v, description: e.target.value }))} /></div>
+          <div className="field"><label>Material *</label><select className="select" value={manualDraft.material} onChange={(e) => setManualDraft((v) => ({ ...v, material: e.target.value }))}><option value="">Selecione</option>{SHEET_MATERIAL_TYPES.map((m) => <option key={m.value} value={m.label}>{m.label}</option>)}</select></div>
+          <div className="field"><label>Espessura (mm) *</label><input className="input" inputMode="decimal" value={manualDraft.thickness_mm} onChange={(e) => setManualDraft((v) => ({ ...v, thickness_mm: e.target.value }))} /></div>
+          <div className="field"><label>Quantidade *</label><input className="input" inputMode="decimal" value={manualDraft.quantity} onChange={(e) => setManualDraft((v) => ({ ...v, quantity: e.target.value }))} /></div>
+        </div>
+        <div className="btn-row"><button type="button" className="btn secondary" onClick={() => {
+          const qty = parseDecimalBR(manualDraft.quantity).value;
+          const thickness = parseDecimalBR(manualDraft.thickness_mm).value;
+          if (!manualDraft.op_number.trim() || !manualDraft.equipment_name.trim() || !manualDraft.description.trim() || !manualDraft.material || qty === null || qty <= 0 || thickness === null || thickness <= 0) { setError("Preencha todos os campos da peça avulsa com valores válidos."); return; }
+          if (!isMaterialCompatible(sheetMaterialType, manualDraft.material)) { setError("O material da peça avulsa não é compatível com o tipo de chapa do nesting."); return; }
+          if (thick && Math.abs(Number(thick) - thickness) > 0.0001) { setError("A espessura da peça avulsa deve ser igual à espessura do nesting."); return; }
+          setManualItems((items) => [...items, manualDraft]);
+          if (!thick) setThick(String(thickness));
+          setManualDraft({ op_number: "", equipment_name: "", description: "", material: "", thickness_mm: String(thickness), quantity: "1" });
+          setError("");
+        }}>Adicionar peça avulsa</button></div>
+        {manualItems.length > 0 && <div className="table-wrap" style={{ marginTop: 12 }}><table><thead><tr><th>OP</th><th>Equipamento</th><th>Descrição</th><th>Material</th><th>Espessura</th><th>Qtd.</th><th></th></tr></thead><tbody>{manualItems.map((item, index) => <tr key={`${item.op_number}-${index}`}><td>{item.op_number}</td><td>{item.equipment_name}</td><td>{item.description}</td><td>{item.material}</td><td>{item.thickness_mm} mm</td><td>{item.quantity}</td><td><button type="button" className="btn secondary small" onClick={() => setManualItems((items) => items.filter((_, i) => i !== index))}>Remover</button></td></tr>)}</tbody></table></div>}
+      </section>
+
+      <section className="card">
         <h2 className="section-title">Buscar peças</h2>
         <p className="section-sub">
           Só aparecem peças de linhas de laser ({nestableLines.map((l) => l.name).join(", ") || "nenhuma habilitada"}).
@@ -516,11 +554,7 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
             <input type="checkbox" checked={onlyUnscheduled} onChange={(e) => { setOnlyUnscheduled(e.target.checked); setPage(0); }} />
             Só com saldo a programar
           </label>
-          <button type="button" className="btn secondary" onClick={() => setAvulsoModal(true)} disabled={avulsoLists.length === 0} title={avulsoLists.length === 0 ? "Crie antes uma lista do tipo Avulsos" : undefined}>
-            Cadastrar peça avulsa
-          </button>
         </div>
-        {avulsoLists.length === 0 && <p className="muted" style={{ marginBottom: 10 }}>Para peças sem OP ou fora de lista, crie uma lista do tipo <strong>Avulsos</strong> e cadastre a peça nela.</p>}
         {pickLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
@@ -573,20 +607,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       </div>
 
     </form>
-
-      {avulsoModal && (
-        <ItemFormModal
-          editing={null}
-          lists={avulsoLists}
-          lines={nestableLines.filter((l) => l.active)}
-          defaultListId={avulsoLists[0]?.id}
-          onClose={() => setAvulsoModal(false)}
-          onSaved={() => {
-            setAvulsoModal(false);
-            setRefreshKey((k) => k + 1);
-          }}
-        />
-      )}
     </>
   );
 }

@@ -43,7 +43,7 @@ function CutModal({
   onDone: (text: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(items.map((i) => [i.production_order_id, String(i.quantity_cut).replace(".", ",")])),
+    Object.fromEntries(items.map((i) => [i.id, String(i.quantity_cut).replace(".", ",")])),
   );
   const [confirmed, setConfirmed] = useState(false);
   const [note, setNote] = useState("");
@@ -51,7 +51,7 @@ function CutModal({
   const [error, setError] = useState("");
 
   const parsed = items.map((i) => {
-    const v = parseDecimalBR(values[i.production_order_id] ?? "").value;
+    const v = parseDecimalBR(values[i.id] ?? "").value;
     const invalid = v === null || v < 0 || v > i.quantity_programmed;
     return { item: i, value: v, invalid };
   });
@@ -63,17 +63,8 @@ function CutModal({
     setError("");
     if (anyInvalid) return setError("Corrija as quantidades destacadas: use zero ou mais, sem ultrapassar o programado.");
     if (mode === "complete" && !confirmed) return setError("Marque a confirmação de que conferiu as quantidades.");
-    // A RPC espera o UUID da chave primária de production_orders, nunca o número visível da OP.
-    // Use o id da relação carregada e valide antes de enviar para evitar converter "7.604.497" em UUID.
-    const invalidId = parsed.find((p) => {
-      const id = p.item.production_orders?.id;
-      return !id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-    });
-    if (invalidId) {
-      return setError(`Não foi possível identificar o UUID interno da OP ${invalidId.item.production_orders?.op_number ?? ""}. Atualize a página e tente novamente.`);
-    }
     const payload: CutInput[] = parsed.map((p) => ({
-      production_order_id: p.item.production_orders!.id,
+      nesting_item_id: p.item.id,
       quantity_cut: p.value as number,
     }));
     setBusy(true);
@@ -114,7 +105,7 @@ function CutModal({
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>OP</th><th>Item</th><th>Descrição</th><th className="num">Programado</th><th>Cortado</th><th className="num">Diferença</th></tr>
+            <tr><th>OP</th><th>Equipamento / item</th><th>Descrição</th><th className="num">Programado</th><th>Cortado</th><th className="num">Diferença</th></tr>
           </thead>
           <tbody>
             {parsed.map(({ item, value, invalid }) => {
@@ -122,17 +113,17 @@ function CutModal({
               const diff = value === null ? null : item.quantity_programmed - value;
               return (
                 <tr key={item.id}>
-                  <td><strong>{po?.op_number}</strong></td>
-                  <td>{po?.item_code ?? "—"}</td>
-                  <td>{po?.description ?? "—"}</td>
+                  <td><strong>{po?.op_number ?? item.op_number}</strong></td>
+                  <td>{po?.item_code ?? item.equipment_name ?? "—"}</td>
+                  <td>{po?.description ?? item.description ?? "—"}</td>
                   <td className="num">{formatQty(item.quantity_programmed)}</td>
                   <td style={{ minWidth: 130 }}>
                     <input
                       className={`input cell-input${invalid ? " invalid" : ""}`}
                       inputMode="decimal"
-                      value={values[item.production_order_id] ?? ""}
-                      onChange={(e) => setValues((v) => ({ ...v, [item.production_order_id]: e.target.value }))}
-                      aria-label={`Quantidade cortada da OP ${po?.op_number}`}
+                      value={values[item.id] ?? ""}
+                      onChange={(e) => setValues((v) => ({ ...v, [item.id]: e.target.value }))}
+                      aria-label={`Quantidade cortada da OP ${po?.op_number ?? item.op_number}`}
                     />
                   </td>
                   <td className="num">{diff === null || invalid ? "—" : diff > 0 ? <span className="pill amber">faltam {formatQty(diff)}</span> : <span className="pill green">completo</span>}</td>
@@ -145,7 +136,7 @@ function CutModal({
       <div className="btn-row" style={{ marginTop: 12 }}>
         <button
           className="btn secondary small"
-          onClick={() => setValues(Object.fromEntries(items.map((i) => [i.production_order_id, String(i.quantity_programmed).replace(".", ",")])))}
+          onClick={() => setValues(Object.fromEntries(items.map((i) => [i.id, String(i.quantity_programmed).replace(".", ",")])))}
         >
           Preencher tudo com o programado
         </button>
@@ -288,7 +279,7 @@ export default function NestingDetailPage() {
           </section>
 
           <section className="card section-gap">
-            <h2 className="section-title">OPs neste nesting ({items.length})</h2>
+            <h2 className="section-title">Peças neste nesting ({items.length})</h2>
             <p className="section-sub">Programado: {formatQty(totalProg)} · Cortado: {formatQty(totalCut)}</p>
             {items.length === 0 ? (
               <div className="empty">Nenhuma OP vinculada. {nesting.status === "Programado" && canPlan ? "Use “Editar” para vincular OPs da lista." : ""}</div>
@@ -301,10 +292,10 @@ export default function NestingDetailPage() {
                   <tbody>
                     {items.map((i) => (
                       <tr key={i.id}>
-                        <td><Link className="link" href={`/ops/${i.production_order_id}`}>{i.production_orders?.op_number}</Link></td>
-                        <td>{i.production_orders?.item_code ?? "—"}</td>
-                        <td>{i.production_orders?.description ?? "—"}</td>
-                        <td>{i.production_orders?.production_lists ? listLabel(i.production_orders.production_lists.code, i.production_orders.production_lists.name) : "—"}</td>
+                        <td>{i.production_order_id ? <Link className="link" href={`/ops/${i.production_order_id}`}>{i.production_orders?.op_number}</Link> : <strong>{i.op_number}</strong>}</td>
+                        <td>{i.production_orders?.item_code ?? i.equipment_name ?? "—"}</td>
+                        <td>{i.production_orders?.description ?? i.description ?? "—"}</td>
+                        <td>{i.production_orders?.production_lists ? listLabel(i.production_orders.production_lists.code, i.production_orders.production_lists.name) : i.production_order_id ? "—" : "Avulsa"}</td>
                         <td className="num">{formatQty(i.production_orders?.quantity)}</td>
                         <td className="num">{formatQty(i.quantity_programmed)}{i.allow_excess && <> <span className="pill amber">excedente</span></>}</td>
                         <td className="num">{formatQty(i.quantity_cut)}</td>

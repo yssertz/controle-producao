@@ -119,7 +119,12 @@ export interface NestingSummary {
 /** Vínculo nesting x item (tabela nesting_order_items) com o item embutido */
 export interface NestingItemRow {
   id: string;
-  production_order_id: string;
+  production_order_id: string | null;
+  op_number: string | null;
+  equipment_name: string | null;
+  description: string | null;
+  material: string | null;
+  thickness_mm: number | null;
   quantity_programmed: number;
   quantity_cut: number;
   allow_excess: boolean;
