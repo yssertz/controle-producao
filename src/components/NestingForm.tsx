@@ -607,7 +607,6 @@ export function NestingForm({ nestingId, initialListId }: { nestingId?: string; 
       </div>
 
     </form>
-}
     </>
   );
 }
